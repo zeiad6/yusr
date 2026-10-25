@@ -78,7 +78,17 @@
     "subtitle": "Sign in to continue",
     "invalidCredentials": "Wrong username or password",
     "firstRunTitle": "Welcome to Yusr",
-    "firstRunText": "These are the administrator's sign-in details, created for this computer. Keep them, then change the password in Settings. A copy is in first-sign-in.txt in the data folder."
+    "firstRunText": "These are the administrator's sign-in details, created for this computer. Keep them, then change the password in Settings. A copy is in first-sign-in.txt in the data folder.",
+    "defaultCredentials": "Default Login Credentials",
+    "defaultUsername": "Username",
+    "defaultPassword": "Password",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "autofill": "Auto-fill Credentials",
+    "versionDetails": "Release Details",
+    "releaseTag": "Self-Contained Sovereign Edition (100% Offline)",
+    "specs": "Forensic SHA-256 Ledger · ZATCA Phase 2 Compliant",
+    "engineSpecs": "Embedded PostgreSQL 18 · Bundled Offline Local LLM"
   },
   "roles": {
     "admin": "Administrator",

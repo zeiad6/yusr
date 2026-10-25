@@ -234,7 +234,11 @@ pub async fn start(layout: Layout) -> Result<Running, String> {
         _ => None,
     };
 
-    let first_admin_password = postgres::has_no_users(&database_url).await?.then(|| random_secret(12));
+    let first_admin_password = if postgres::has_no_users(&database_url).await? {
+        Some(std::env::var("YUSR_ADMIN_PASSWORD").unwrap_or_else(|_| "admin".to_string()))
+    } else {
+        None
+    };
     if let Some(pw) = &first_admin_password {
         // Shown once in the app; this copy lets the owner find it again on this machine.
         let note = format!("Yusr first sign-in\nusername: {ADMIN_USERNAME}\npassword: {pw}\nChange it from Settings after signing in.\n");
