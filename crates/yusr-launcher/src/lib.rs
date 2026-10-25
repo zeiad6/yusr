@@ -235,7 +235,7 @@ pub async fn start(layout: Layout) -> Result<Running, String> {
     };
 
     let first_admin_password = if postgres::has_no_users(&database_url).await? {
-        Some(std::env::var("YUSR_ADMIN_PASSWORD").unwrap_or_else(|_| "admin".to_string()))
+        Some(std::env::var("YUSR_ADMIN_PASSWORD").unwrap_or_else(|_| "admin12345".to_string()))
     } else {
         None
     };

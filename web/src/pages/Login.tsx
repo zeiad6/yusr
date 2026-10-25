@@ -21,7 +21,7 @@ export default function Login() {
   const { session, login } = useAuthStore();
   const [firstRun] = useState(firstRunPassword);
   const defaultUser = "admin";
-  const defaultPass = firstRun || "admin";
+  const defaultPass = firstRun || "admin12345";
   const [username, setUsername] = useState(defaultUser);
   const [password, setPassword] = useState(defaultPass);
   const [error, setError] = useState("");
