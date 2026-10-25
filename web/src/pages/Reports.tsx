@@ -15,9 +15,13 @@ import {
   Users,
   HeartHandshake,
   Clock,
+  ShieldCheck,
+  Copy,
   type LucideIcon,
 } from "lucide-react";
 import { api, errorMessage } from "../api/client";
+import Modal from "../components/Modal";
+import { toastInfo, toastSuccess, toastError } from "../components/Toast";
 import type {
   ActivityRow,
   AidSummary,
@@ -33,7 +37,6 @@ import type {
   TrialBalanceRow,
   VolunteerSummary,
 } from "../api/types";
-import { toastInfo } from "../components/Toast";
 import PaperFrame from "../components/PaperFrame";
 import { ErrorNote, Field, Loading, PageHeader } from "../components/ui";
 import { useAuthStore } from "../store/auth";
@@ -453,6 +456,36 @@ export default function Reports() {
   const [state, setState] = useState<{ html: string; built: Built; ctx: Ctx } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [transparencyResult, setTransparencyResult] = useState<{
+    report_number: string;
+    public_verification_token: string;
+    audit_head_hash: string;
+    verification_url: string;
+  } | null>(null);
+
+  const handlePublishTransparency = async () => {
+    setPublishing(true);
+    try {
+      const res = await api.post<{
+        report_number: string;
+        public_verification_token: string;
+        audit_head_hash: string;
+        verification_url: string;
+      }>("/reports/transparency", {
+        title: state?.built.title ?? "تقرير الشفافية المالية",
+        period_start: from,
+        period_end: to,
+      });
+      setTransparencyResult(res);
+      toastSuccess("تم توثيق تقرير الشفافية بنجاح وربطه بالبصمة الجنائية للسلسلة");
+    } catch (e) {
+      toastError(errorMessage(e));
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   const def = available.find((r) => r.key === key);
 
   useEffect(() => {
@@ -540,6 +573,15 @@ export default function Reports() {
               <button type="button" className="btn btn-secondary" disabled={!state || loading} onClick={() => state && downloadCsv(fileName, state.built.csv)}>
                 <FileSpreadsheet size={16} /> Excel
               </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={!state || loading || publishing}
+                onClick={handlePublishTransparency}
+                title="إصدار وتوثيق تقرير شفافية رسمي مرتبط بسلسلة التدقيق الجنائي"
+              >
+                <ShieldCheck size={16} /> {publishing ? "جارٍ التوثيق…" : "توثيق التقرير (SHA-256)"}
+              </button>
             </div>
           </div>
           {error && <ErrorNote message={error} />}
@@ -548,6 +590,49 @@ export default function Reports() {
           </div>
         </section>
       </div>
+
+      {transparencyResult && (
+        <Modal isOpen={!!transparencyResult} title="توثيق تقرير الشفافية الرسمي (SHA-256 Verified)" onClose={() => setTransparencyResult(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            <p className="settings-note" style={{ margin: 0 }}>
+              تم تثبيت هذا التقرير وتوثيق أرقامه ومطابقته رقمياً مع سلسلة التدقيق الجنائي SHA-256 غير القابلة للتعديل.
+            </p>
+
+            <div style={{ background: "var(--surface-sunken)", padding: "12px", borderRadius: "8px" }}>
+              <span style={{ fontSize: "12px", color: "var(--text-tertiary)" }}>رقم التقرير الرسمي:</span>
+              <div style={{ fontSize: "16px", fontWeight: "bold" }}>{transparencyResult.report_number}</div>
+            </div>
+
+            <div style={{ background: "var(--surface-sunken)", padding: "12px", borderRadius: "8px" }}>
+              <span style={{ fontSize: "12px", color: "var(--text-tertiary)" }}>بصمة كتلة التدقيق الجنائي (Audit Chain Head Hash):</span>
+              <code style={{ display: "block", fontSize: "11px", wordBreak: "break-all", marginTop: "4px" }}>
+                {transparencyResult.audit_head_hash}
+              </code>
+            </div>
+
+            <div style={{ background: "var(--surface-sunken)", padding: "12px", borderRadius: "8px" }}>
+              <span style={{ fontSize: "12px", color: "var(--text-tertiary)" }}>رابط التحقق العام المباشر للمتبرعين والمدققين:</span>
+              <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                <input
+                  readOnly
+                  value={transparencyResult.verification_url}
+                  style={{ flex: 1, fontSize: "12px", fontFamily: "monospace" }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(transparencyResult.verification_url);
+                    toastSuccess("تم نسخ رابط التحقق");
+                  }}
+                >
+                  <Copy size={14} /> نسخ
+                </button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

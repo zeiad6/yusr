@@ -404,6 +404,68 @@ pub async fn chat(State(s): State<AppState>, a: Auth, Json(req): Json<ChatReques
     Ok(([(header::CONTENT_TYPE, "text/plain; charset=utf-8"), (header::CACHE_CONTROL, "no-store")], Body::from_stream(stream)).into_response())
 }
 
+#[derive(Debug, Serialize)]
+pub struct AvailableModel {
+    pub name: String,
+    pub filename: String,
+    pub path: String,
+    pub size_bytes: u64,
+    pub is_active: bool,
+}
+
+/// Scans for locally installed GGUF models and reports the active model.
+pub async fn available_models(State(s): State<AppState>, a: Auth) -> ApiResult<Json<Vec<AvailableModel>>> {
+    a.require(Permission::AdvisorUse)?;
+    let cfg = settings(&s).await?;
+    let mut models = Vec::new();
+
+    let candidate_dirs = ["app/resources/models", "resources/models", "models", "../resources/models"];
+    for dir_str in candidate_dirs {
+        let p = std::path::Path::new(dir_str);
+        if let Ok(entries) = std::fs::read_dir(p) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().is_some_and(|ext| ext == "gguf") {
+                    let filename = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                    let name = filename.trim_end_matches(".gguf").replace(['-', '_'], " ");
+                    let size_bytes = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                    let is_active = cfg.model == filename || cfg.model == name || (cfg.model == "yusr-advisor" && filename == "advisor.gguf");
+                    models.push(AvailableModel {
+                        name,
+                        filename,
+                        path: path.display().to_string(),
+                        size_bytes,
+                        is_active,
+                    });
+                }
+            }
+        }
+    }
+    if models.is_empty() {
+        models.push(AvailableModel {
+            name: cfg.model.clone(),
+            filename: format!("{}.gguf", cfg.model),
+            path: "".into(),
+            size_bytes: 0,
+            is_active: true,
+        });
+    }
+    Ok(Json(models))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SwitchModelRequest {
+    pub model: String,
+}
+
+/// Hot-swaps the active model in the advisor settings.
+pub async fn switch_model(State(s): State<AppState>, a: Auth, Json(req): Json<SwitchModelRequest>) -> ApiResult<StatusCode> {
+    a.require(Permission::AdvisorManage)?;
+    let mut cfg = settings(&s).await?;
+    cfg.model = req.model.trim().to_string();
+    update_settings(State(s), a, Json(cfg)).await
+}
+
 /// A stream fed by a spawned task through a small channel.
 fn async_stream<F, Fut>(producer: F) -> impl futures_util::Stream<Item = Result<String, std::convert::Infallible>>
 where

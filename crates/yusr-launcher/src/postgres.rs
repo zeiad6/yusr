@@ -51,6 +51,11 @@ impl Postgres {
     }
 
     pub fn start_args(&self) -> Vec<String> {
+        self.start_args_with_lan(false)
+    }
+
+    pub fn start_args_with_lan(&self, lan: bool) -> Vec<String> {
+        let listen = if lan { "*" } else { "127.0.0.1" };
         vec![
             "start".into(),
             "-D".into(),
@@ -61,8 +66,29 @@ impl Postgres {
             "-t".into(),
             WAIT_SECONDS.into(),
             "-o".into(),
-            format!("-p {} -c listen_addresses=127.0.0.1", self.port),
+            format!("-p {} -c listen_addresses={listen}", self.port),
         ]
+    }
+
+    /// Configures pg_hba.conf to permit connections from authorized LAN subnets.
+    pub fn configure_lan_access(&self, subnet: &str) -> Result<(), String> {
+        let hba_path = self.data.join("pg_hba.conf");
+        if !hba_path.exists() {
+            return Ok(());
+        }
+        let content = std::fs::read_to_string(&hba_path).map_err(|e| e.to_string())?;
+        let rule = format!("host    all             all             {subnet}            scram-sha-256");
+        if !content.contains(&rule) {
+            use std::io::Write;
+            let mut file = std::fs::OpenOptions::new()
+                .append(true)
+                .open(&hba_path)
+                .map_err(|e| e.to_string())?;
+            writeln!(file, "\n# Yusr LAN Client Authentication Rule").map_err(|e| e.to_string())?;
+            writeln!(file, "{rule}").map_err(|e| e.to_string())?;
+            tracing::info!(subnet = %subnet, "appended LAN client rule to pg_hba.conf");
+        }
+        Ok(())
     }
 
     /// Creates the cluster on first run. The password file is removed straight after.
@@ -88,10 +114,14 @@ impl Postgres {
     /// Starts the server, first stopping one a crashed session left running (it would hold
     /// the data folder on an old port).
     pub fn start(&self) -> Result<(), String> {
+        self.start_with_lan(false)
+    }
+
+    pub fn start_with_lan(&self, lan: bool) -> Result<(), String> {
         if self.running() {
             self.stop()?;
         }
-        process::run(&self.tool("pg_ctl"), &self.start_args()).map(|_| ()).map_err(|e| {
+        process::run(&self.tool("pg_ctl"), &self.start_args_with_lan(lan)).map(|_| ()).map_err(|e| {
             let log = std::fs::read_to_string(&self.log).unwrap_or_default();
             let tail: String = log.lines().rev().take(15).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
             format!("{e}\n{tail}")

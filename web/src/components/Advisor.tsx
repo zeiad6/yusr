@@ -50,13 +50,36 @@ export default function AdvisorWidget() {
   const [question, setQuestion] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [models, setModels] = useState<Array<{ name: string; filename: string; size_bytes: number; is_active: boolean }>>([]);
+  const [activeModel, setActiveModel] = useState<string>("");
   const abort = useRef<AbortController | null>(null);
   const end = useRef<HTMLDivElement>(null);
   const allowed = can("advisor.use");
 
+  const loadModels = useCallback(() => {
+    api.get<Array<{ name: string; filename: string; size_bytes: number; is_active: boolean }>>("/advisor/available-models")
+      .then((res) => {
+        setModels(res);
+        const act = res.find((m) => m.is_active);
+        if (act) setActiveModel(act.filename);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const handleSwitchModel = async (newModel: string) => {
+    try {
+      setActiveModel(newModel);
+      await api.post("/advisor/switch-model", { model: newModel });
+      loadModels();
+    } catch {
+      // ignore
+    }
+  };
+
   const refresh = useCallback(() => {
     api.get<Insight[]>("/advisor/insights").then(setInsights, () => setInsights([]));
-  }, []);
+    loadModels();
+  }, [loadModels]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -144,7 +167,32 @@ export default function AdvisorWidget() {
             </span>
             <div>
               <strong>{t("advisor.title")}</strong>
-              <small>{t("advisor.readOnly")}</small>
+              {models.length > 0 ? (
+                <div style={{ marginTop: "2px" }}>
+                  <select
+                    value={activeModel}
+                    onChange={(e) => handleSwitchModel(e.target.value)}
+                    style={{
+                      background: "rgba(0,0,0,0.35)",
+                      color: "var(--sidebar-text-strong)",
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      borderRadius: "4px",
+                      fontSize: "11px",
+                      padding: "1px 6px",
+                      fontFamily: "inherit",
+                    }}
+                    title="تبديل نموذج الذكاء الاصطناعي المحلي (Hot-Swap GGUF Model)"
+                  >
+                    {models.map((m) => (
+                      <option key={m.filename} value={m.filename}>
+                        🤖 {m.name} {m.size_bytes > 0 ? `(${(m.size_bytes / (1024 * 1024 * 1024)).toFixed(1)} GB)` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <small>{t("advisor.readOnly")}</small>
+              )}
             </div>
             <button type="button" className="btn-icon" onClick={() => setOpen(false)} aria-label={t("common.close")}>
               <X size={18} />

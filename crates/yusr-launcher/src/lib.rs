@@ -97,21 +97,68 @@ pub fn stored_secret(path: &Path, bytes: usize) -> std::io::Result<String> {
     Ok(s)
 }
 
+/// Network operating mode for Yusr.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NetworkMode {
+    Standalone,
+    LanServer,
+}
+
+impl NetworkMode {
+    pub fn from_env() -> Self {
+        match std::env::var("YUSR_NETWORK_MODE").as_deref() {
+            Ok("lan_server") | Ok("lan") => Self::LanServer,
+            _ => Self::Standalone,
+        }
+    }
+
+    pub fn is_lan(self) -> bool {
+        self == Self::LanServer
+    }
+}
+
+/// Discovers the primary local network IP (e.g., 192.168.x.x) for LAN clients.
+pub fn local_lan_ip() -> Option<String> {
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    Some(socket.local_addr().ok()?.ip().to_string())
+}
+
+/// Probes for GPU acceleration capabilities (CUDA, Vulkan, Apple Metal).
+pub fn detect_gpu_acceleration() -> (bool, &'static str) {
+    if std::path::Path::new("/usr/bin/nvidia-smi").exists()
+        || std::path::Path::new("C:\\Windows\\System32\\nvcuda.dll").exists()
+        || std::env::var("CUDA_PATH").is_ok() {
+        return (true, "cuda");
+    }
+    if std::path::Path::new("C:\\Windows\\System32\\vulkan-1.dll").exists()
+        || std::path::Path::new("/usr/lib/libvulkan.so.1").exists()
+        || std::path::Path::new("/usr/lib/aarch64-linux-gnu/libvulkan.so.1").exists() {
+        return (true, "vulkan");
+    }
+    if cfg!(target_os = "macos") {
+        return (true, "metal");
+    }
+    (false, "cpu")
+}
+
 fn llama_pid_file(data: &Path) -> PathBuf {
     data.join("run").join("llama.pid")
 }
 
-/// Threads for the model: half the cores (the UI and database need the rest), at most 8.
+/// Threads for the model: matches the physical cores on high-spec hardware.
 fn model_threads() -> usize {
-    std::thread::available_parallelism().map_or(2, |n| (n.get() / 2).clamp(1, 8))
+    std::thread::available_parallelism().map_or(4, |n| n.get().clamp(1, 16))
 }
 
-pub fn llama_args(model: &Path, port: u16) -> Vec<String> {
-    vec![
+pub fn llama_args(model: &Path, port: u16, bind_all: bool, mlock: bool) -> Vec<String> {
+    let host = if bind_all { "0.0.0.0" } else { "127.0.0.1" };
+    let (has_gpu, gpu_type) = detect_gpu_acceleration();
+    let mut args = vec![
         "-m".into(),
         model.display().to_string(),
         "--host".into(),
-        "127.0.0.1".into(),
+        host.into(),
         "--port".into(),
         port.to_string(),
         "--alias".into(),
@@ -122,11 +169,23 @@ pub fn llama_args(model: &Path, port: u16) -> Vec<String> {
         model_threads().to_string(),
         // Chat templates (and the enable_thinking switch the server sends) need Jinja.
         "--jinja".into(),
-    ]
+    ];
+    if has_gpu {
+        tracing::info!(gpu = gpu_type, "enabling GPU hardware layer offload for local LLM");
+        args.push("--ngl".into());
+        args.push("99".into());
+    }
+    if mlock {
+        tracing::info!("locking model in physical RAM (--mlock)");
+        args.push("--mlock".into());
+    }
+    args
 }
 
 /// Starts everything and returns once the interface is being served.
 pub async fn start(layout: Layout) -> Result<Running, String> {
+    let network_mode = NetworkMode::from_env();
+    let is_lan = network_mode.is_lan();
     let data = &layout.data;
     for dir in ["secrets", "logs", "backups", "run"] {
         std::fs::create_dir_all(data.join(dir)).map_err(|e| format!("{}: {e}", data.join(dir).display()))?;
@@ -137,7 +196,13 @@ pub async fn start(layout: Layout) -> Result<Running, String> {
     let pg = Postgres::new(layout.pg_bin.clone(), data.join("pgdata"), data.join("logs").join("postgres.log"), free_port().map_err(|e| e.to_string())?);
     let pg = tokio::task::spawn_blocking(move || {
         pg.init_if_needed(DB_USER, &db_password)?;
-        pg.start()?;
+        if is_lan {
+            let subnet = std::env::var("YUSR_LAN_SUBNET").unwrap_or_else(|_| "192.168.0.0/16".into());
+            let _ = pg.configure_lan_access(&subnet);
+            let _ = pg.configure_lan_access("10.0.0.0/8");
+            let _ = pg.configure_lan_access("172.16.0.0/12");
+        }
+        pg.start_with_lan(is_lan)?;
         Ok::<_, String>((pg, db_password))
     })
     .await
@@ -146,12 +211,13 @@ pub async fn start(layout: Layout) -> Result<Running, String> {
     let database_url = pg.url(DB_USER, &db_password, DB_NAME);
     postgres::create_database(&pg.url(DB_USER, &db_password, "postgres"), DB_NAME).await?;
 
+    let mlock_enabled = std::env::var("YUSR_MODEL_MLOCK").map_or(true, |v| v != "0" && v != "false");
     let llama = match (&layout.llama_server, &layout.model) {
         (Some(bin), Some(model)) if bin.exists() && model.exists() => {
             process::kill_stale(&llama_pid_file(data));
             let port = free_port().map_err(|e| e.to_string())?;
             let log = std::fs::File::create(data.join("logs").join("llama-server.log")).map_err(|e| e.to_string())?;
-            match process::background(bin, &llama_args(model, port), log) {
+            match process::background(bin, &llama_args(model, port, is_lan, mlock_enabled), log) {
                 Ok(child) => {
                     let _ = std::fs::write(llama_pid_file(data), child.id().to_string());
                     Some((child, port))
@@ -173,10 +239,16 @@ pub async fn start(layout: Layout) -> Result<Running, String> {
     }
 
     let port = free_port().map_err(|e| e.to_string())?;
-    let url = format!("http://127.0.0.1:{port}");
+    let bind_ip = if is_lan { Ipv4Addr::UNSPECIFIED } else { Ipv4Addr::LOCALHOST };
+    let lan_ip = local_lan_ip().unwrap_or_else(|| "127.0.0.1".into());
+    let url = if is_lan { format!("http://{lan_ip}:{port}") } else { format!("http://127.0.0.1:{port}") };
+    if is_lan {
+        tracing::info!(lan_url = %url, "Yusr LAN Server mode activated for team access");
+    }
+
     let cfg = yusr_server::Config {
         database_url,
-        bind: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
+        bind: SocketAddr::from((bind_ip, port)),
         jwt_secret: jwt_secret.into_bytes(),
         public_url: url.clone(),
         ui_dir: Some(layout.ui_dir.display().to_string()),
@@ -247,7 +319,7 @@ mod tests {
 
     #[test]
     fn model_server_stays_on_loopback() {
-        let args = llama_args(Path::new("m.gguf"), 9000);
+        let args = llama_args(Path::new("m.gguf"), 9000, false, false);
         let host = args.iter().position(|a| a == "--host").unwrap();
         assert_eq!(args[host + 1], "127.0.0.1");
         assert!(args.contains(&MODEL_ALIAS.to_owned()) && args.contains(&"--jinja".to_owned()));

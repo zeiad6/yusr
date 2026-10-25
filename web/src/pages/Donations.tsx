@@ -1,17 +1,29 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Link2, Plus, Printer, UserPlus } from "lucide-react";
+import { Link2, Plus, Printer, UserPlus, Layers, RefreshCw } from "lucide-react";
 import { api, errorMessage, newRequestKey, openHtml } from "../api/client";
 import { DONATION_KINDS, type DonationKind, type DonationRow, type Donor, type NewDonation, type RecordedDonation } from "../api/types";
 import Modal from "../components/Modal";
 import { toastError, toastSuccess } from "../components/Toast";
-import { DataTable, ErrorNote, Field, PageHeader, useLoad, useSubmit } from "../components/ui";
+import { DataTable, ErrorNote, Field, PageHeader, useLoad, useSubmit, Badge } from "../components/ui";
 import { FormActions } from "../components/forms";
 import EditRecord, { EditButton } from "../components/EditRecord";
 import { useAuthStore } from "../store/auth";
 import { localName, useRefs } from "../store/refs";
 import { formatMoney, isPositive, sum, today } from "../utils/money";
 import { DonorForm } from "./Donors";
+
+interface StagedQueueItem {
+  id: string;
+  gateway: string;
+  external_id: string;
+  amount: string;
+  currency: string;
+  donor_name: string | null;
+  status: string;
+  received_at: string;
+  reconciled_at: string | null;
+}
 
 const METHODS = ["cash", "bank", "transfer", "cheque", "sadad", "card"];
 
@@ -32,6 +44,31 @@ export default function Donations() {
   const [recording, setRecording] = useState(false);
   const [checkout, setCheckout] = useState(false);
   const [editing, setEditing] = useState<DonationRow | null>(null);
+  const [showQueue, setShowQueue] = useState(false);
+  const [queueItems, setQueueItems] = useState<StagedQueueItem[]>([]);
+  const [reconciling, setReconciling] = useState(false);
+
+  const loadQueue = async () => {
+    try {
+      setQueueItems(await api.get<StagedQueueItem[]>("/queue/transactions"));
+    } catch {
+      // offline
+    }
+  };
+
+  const handleReconcile = async () => {
+    setReconciling(true);
+    try {
+      const res = await api.post<{ reconciled_count: number; message: string }>("/queue/reconcile", {});
+      toastSuccess(res.message);
+      loadQueue();
+      reload();
+    } catch (e) {
+      toastError(errorMessage(e));
+    } finally {
+      setReconciling(false);
+    }
+  };
   const { data, error, reload } = useLoad(() => api.get<DonationRow[]>("/donations", { from, to, limit: 500 }), [from, to]);
   const rows = data ?? [];
 
@@ -49,6 +86,9 @@ export default function Donations() {
             <Link2 size={16} /> {t("donations.paymentLink")}
           </button>
         )}
+        <button type="button" className="btn btn-secondary" onClick={() => { setShowQueue(true); loadQueue(); }}>
+          <Layers size={16} /> طابور بوابات الدفع
+        </button>
         {can("donations.record") && (
           <button type="button" className="btn btn-primary" data-shortcut="new" onClick={() => setRecording(true)}>
             <Plus size={16} /> {t("donations.record")}
@@ -112,6 +152,64 @@ export default function Donations() {
             { key: "note", label: t("common.notes"), type: "textarea" },
           ]}
         />
+      )}
+
+      {showQueue && (
+        <Modal isOpen={showQueue} title="طابور بوابات الدفع والتحصيلات الإلكترونية (Staging Queue)" onClose={() => setShowQueue(false)}>
+          <div style={{ marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
+            <p className="settings-note" style={{ margin: 0 }}>
+              يحتفظ النظام بالحركات الرقمية المستلمة في طابور محلي مستقل لحين التأكيد والمطابقة مع الدفاتر.
+            </p>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={handleReconcile}
+              disabled={reconciling || queueItems.filter((q) => q.status === "staged").length === 0}
+            >
+              <RefreshCw size={14} className={reconciling ? "spin" : ""} />
+              {reconciling ? "جارٍ المطابقة…" : "مطابقة وترحيل الدفعات (Reconcile Now)"}
+            </button>
+          </div>
+
+          <div style={{ maxHeight: "350px", overflowY: "auto" }}>
+            <table className="data-table" style={{ width: "100%" }}>
+              <thead>
+                <tr>
+                  <th>البوابة</th>
+                  <th>المعرف الخارجي</th>
+                  <th>المتبرع</th>
+                  <th>المبلغ</th>
+                  <th>الحالة</th>
+                  <th>وقت الاستلام</th>
+                </tr>
+              </thead>
+              <tbody>
+                {queueItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>
+                      لا توجد حركات معلقة في الطابور حالياً
+                    </td>
+                  </tr>
+                ) : (
+                  queueItems.map((item) => (
+                    <tr key={item.id}>
+                      <td><Badge tone="secondary">{item.gateway.toUpperCase()}</Badge></td>
+                      <td style={{ fontFamily: "monospace" }}>{item.external_id}</td>
+                      <td>{item.donor_name || "—"}</td>
+                      <td className="num"><strong>{formatMoney(item.amount, item.currency, i18n.language)}</strong></td>
+                      <td>
+                        <Badge tone={item.status === "reconciled" ? "success" : item.status === "staged" ? "warning" : "secondary"}>
+                          {item.status === "reconciled" ? "مرحل للدفاتر" : item.status === "staged" ? "معلق بالطابور" : item.status}
+                        </Badge>
+                      </td>
+                      <td style={{ fontSize: "12px" }}>{new Date(item.received_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Modal>
       )}
     </div>
   );

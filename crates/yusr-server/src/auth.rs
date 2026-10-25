@@ -289,9 +289,9 @@ impl Auth {
         if self.can(p) { Ok(()) } else { Err(ApiError::forbidden(p.as_str())) }
     }
 
-    /// Actor string recorded in the audit trail.
+    /// Actor string recorded in the cryptographic audit trail, capturing both username and user_id.
     pub fn actor(&self) -> String {
-        format!("user:{}", self.username)
+        format!("user:{}:{}", self.username, self.user_id)
     }
 }
 

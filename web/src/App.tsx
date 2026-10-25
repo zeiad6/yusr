@@ -26,6 +26,7 @@ import Archive from "./pages/Archive";
 import Letters from "./pages/Letters";
 import Sponsorships from "./pages/Sponsorships";
 import Volunteers from "./pages/Volunteers";
+import VerifyReport from "./pages/VerifyReport";
 import { NAV } from "./components/Sidebar";
 
 function Protected({ children }: { children: ReactNode }) {
@@ -71,6 +72,8 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       {/* Public: donors land here from the gateway without a staff session. */}
       <Route path="/donations/return" element={<PaymentReturn />} />
+      {/* Public: cryptographic verification of transparency reports. */}
+      <Route path="/verify/report" element={<VerifyReport />} />
       <Route
         path="/"
         element={

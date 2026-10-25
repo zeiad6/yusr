@@ -60,6 +60,24 @@ pub fn run() {
                 .build()?;
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
+                // Check if configured to run in Client Mode connecting to a remote LAN host
+                let client_host = std::env::var("YUSR_HOST_URL").ok()
+                    .or_else(|| std::fs::read_to_string(yusr_launcher::paths::data_dir().join("client_host.txt")).ok().map(|s| s.trim().to_owned()))
+                    .filter(|s| !s.is_empty());
+
+                if let Some(host_url) = client_host {
+                    tracing::info!(host = %host_url, "launching in LAN Client Mode, connecting to remote host");
+                    match host_url.parse() {
+                        Ok(u) => {
+                            if let Err(e) = window.navigate(u) {
+                                show_error(&window, &e.to_string());
+                            }
+                            return;
+                        }
+                        Err(e) => show_error(&window, &format!("Invalid host URL: {e}")),
+                    }
+                }
+
                 let started = match layout(&handle) {
                     Ok(l) => yusr_launcher::start(l).await,
                     Err(e) => Err(e),
