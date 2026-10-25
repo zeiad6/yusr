@@ -56,6 +56,11 @@ impl Postgres {
 
     pub fn start_args_with_lan(&self, lan: bool) -> Vec<String> {
         let listen = if lan { "*" } else { "127.0.0.1" };
+        let mut opts = format!("-p {} -c listen_addresses={listen}", self.port);
+        #[cfg(unix)]
+        {
+            opts.push_str(" -c unix_socket_directories=''");
+        }
         vec![
             "start".into(),
             "-D".into(),
@@ -66,7 +71,7 @@ impl Postgres {
             "-t".into(),
             WAIT_SECONDS.into(),
             "-o".into(),
-            format!("-p {} -c listen_addresses={listen}", self.port),
+            opts,
         ]
     }
 

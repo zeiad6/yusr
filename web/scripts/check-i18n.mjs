@@ -2,8 +2,9 @@
 // Static keys: t("a.b"). Dynamic keys: t(`a.b.${x}`) must name an existing object `a.b`.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = new URL("../src/", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../src/", import.meta.url));
 const ar = JSON.parse(readFileSync(join(root, "i18n/ar.json"), "utf8"));
 const en = JSON.parse(readFileSync(join(root, "i18n/en.json"), "utf8"));
 

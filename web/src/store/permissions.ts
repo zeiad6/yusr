@@ -24,3 +24,61 @@ export type PermissionGroup = keyof typeof PERMISSION_GROUPS;
 export type Permission = (typeof PERMISSION_GROUPS)[PermissionGroup][number];
 
 export const ALL_PERMISSIONS = Object.values(PERMISSION_GROUPS).flat() as Permission[];
+
+const ROLE_DEFAULTS: Record<string, Set<string>> = {
+  admin: new Set(ALL_PERMISSIONS),
+  accountant: new Set(
+    ALL_PERMISSIONS.filter(
+      (p) =>
+        ![
+          "users.manage",
+          "cases.manage",
+          "volunteers.manage",
+          "backup.restore",
+          "advisor.manage",
+        ].includes(p)
+    )
+  ),
+  case_worker: new Set([
+    "reports.read",
+    "cases.read",
+    "cases.manage",
+    "aid.distribute",
+    "vouchers.redeem",
+    "donors.read",
+    "donations.read",
+    "sponsorships.read",
+    "volunteers.read",
+    "volunteers.manage",
+    "volunteers.hours",
+    "zakat.calculate",
+    "archive.read",
+    "archive.write",
+    "letters.read",
+    "letters.write",
+    "advisor.use",
+  ]),
+  auditor: new Set([
+    "reports.read",
+    "ledger.read",
+    "donors.read",
+    "donations.read",
+    "sponsorships.read",
+    "cases.read",
+    "volunteers.read",
+    "zakat.calculate",
+    "invoices.read",
+    "archive.read",
+    "archive.confidential",
+    "letters.read",
+    "audit.read",
+    "advisor.use",
+  ]),
+  viewer: new Set(["reports.read", "zakat.calculate", "advisor.use"]),
+};
+
+export function allows(role: string | undefined, permission: Permission | string): boolean {
+  if (!role) return false;
+  const set = ROLE_DEFAULTS[role];
+  return set ? set.has(permission) : false;
+}
