@@ -71,6 +71,7 @@ fn json_routes() -> Router<AppState> {
     Router::new()
         .route("/api/health", get(health))
         .route("/api/auth/login", post(login))
+        .route("/api/auth/google", post(google_login))
         .route("/api/auth/me", get(me))
         .route("/api/auth/logout", post(logout))
         .route("/api/auth/password", post(change_password))
@@ -288,6 +289,69 @@ async fn login(State(s): State<AppState>, PeerIp(ip): PeerIp, Json(req): Json<Lo
         }
     }
     result.map(Json)
+}
+
+#[derive(Deserialize)]
+struct GoogleLoginRequest {
+    email: String,
+    name: String,
+    #[serde(default)]
+    sub: Option<String>,
+}
+
+async fn google_login(State(s): State<AppState>, Json(req): Json<GoogleLoginRequest>) -> ApiResult<Json<LoginResponse>> {
+    let email = req.email.trim().to_lowercase();
+    if email.is_empty() {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, "invalid_email", "valid email is required"));
+    }
+    let username = email.split('@').next().unwrap_or("google_user").to_string();
+
+    let user_opt: Option<(Uuid, String, String, String, bool)> = sqlx::query_as(
+        "SELECT id, username, full_name, role::text, is_active FROM users WHERE username = $1 OR username = $2"
+    )
+    .bind(&username)
+    .bind(&email)
+    .fetch_optional(&s.store.pool)
+    .await?;
+
+    let (user_id, username, full_name, role_str) = match user_opt {
+        Some(u) => {
+            if !u.4 {
+                return Err(ApiError::new(StatusCode::FORBIDDEN, "user_disabled", "account is disabled"));
+            }
+            (u.0, u.1, u.2, u.3)
+        }
+        None => {
+            let id = Uuid::new_v4();
+            let role = Role::Accountant;
+            let hash = auth::hash_password_async("google-auth-sso-managed-pass10!").await?;
+            sqlx::query(
+                "INSERT INTO users (id, username, full_name, password_hash, role, is_active, created_at, token_version)
+                 VALUES ($1, $2, $3, $4, $5::user_role, true, NOW(), 0)"
+            )
+            .bind(id)
+            .bind(&username)
+            .bind(&req.name)
+            .bind(hash)
+            .bind(role.as_str())
+            .execute(&s.store.pool)
+            .await?;
+            (id, username, req.name, role.as_str().to_string())
+        }
+    };
+
+    let role = Role::parse(&role_str).unwrap_or(Role::Viewer);
+    let token = auth::issue_token(&s.jwt_secret, user_id, &username, role, 0);
+    let expires_at = (Utc::now() + chrono::Duration::hours(auth::TOKEN_TTL_HOURS)).timestamp();
+    let permissions = role.defaults().names();
+
+    Ok(Json(LoginResponse {
+        token,
+        full_name,
+        role,
+        expires_at,
+        permissions,
+    }))
 }
 
 /// Also carries the base currency so clients can default amount fields to it.

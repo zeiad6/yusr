@@ -88,7 +88,10 @@
     "versionDetails": "Release Details",
     "releaseTag": "Self-Contained Sovereign Edition (100% Offline)",
     "specs": "Forensic SHA-256 Ledger · ZATCA Phase 2 Compliant",
-    "engineSpecs": "Embedded PostgreSQL 18 · Bundled Offline Local LLM"
+    "engineSpecs": "Embedded PostgreSQL 18 · Bundled Offline Local LLM",
+    "googleSignIn": "Sign in with Google",
+    "orContinueWith": "or continue with",
+    "googleOfflineNotice": "Google sign-in requires an active internet connection"
   },
   "roles": {
     "admin": "Administrator",

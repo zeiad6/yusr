@@ -88,7 +88,10 @@
     "versionDetails": "تفاصيل الإصدار",
     "releaseTag": "إصدار سيادي مكتفٍ ذاتياً (100% Offline)",
     "specs": "سلسلة كتل SHA-256 · متوافق مع هيئة الزكاة والضريبة (ZATCA Phase 2)",
-    "engineSpecs": "PostgreSQL 18 Embedded · محرك ذكاء اصطناعي محلي مدمج"
+    "engineSpecs": "PostgreSQL 18 Embedded · محرك ذكاء اصطناعي محلي مدمج",
+    "googleSignIn": "تسجيل الدخول عبر Google",
+    "orContinueWith": "أو المتابعة عبر",
+    "googleOfflineNotice": "يتطلب تسجيل الدخول عبر Google اتصالاً نشطاً بالإنترنت"
   },
   "roles": {
     "admin": "مدير النظام",

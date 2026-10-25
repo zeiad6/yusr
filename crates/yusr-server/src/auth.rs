@@ -46,6 +46,17 @@ impl Role {
             Self::Viewer => "viewer",
         }
     }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "admin" => Some(Self::Admin),
+            "accountant" => Some(Self::Accountant),
+            "case_worker" => Some(Self::CaseWorker),
+            "auditor" => Some(Self::Auditor),
+            "viewer" => Some(Self::Viewer),
+            _ => None,
+        }
+    }
 }
 
 /// Every protected operation names one permission. Roles grant default sets; an admin can
