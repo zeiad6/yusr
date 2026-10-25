@@ -1,0 +1,31 @@
+[package]
+name = "yusr-infra"
+description = "PostgreSQL persistence and use cases for Yusr: posting engine, audit chain, donations, aid, reports."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+yusr-domain.workspace = true
+base64.workspace = true
+chrono.workspace = true
+flate2 = "1"
+futures-util = { version = "0.3", default-features = false }
+hex.workspace = true
+rand.workspace = true
+rust_decimal.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+rust_decimal_macros.workspace = true
+k256.workspace = true

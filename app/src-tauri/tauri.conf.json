@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Yusr",
+  "version": "0.2.0",
+  "identifier": "com.zeidexsoft.yusr",
+  "build": {
+    "frontendDist": "../splash"
+  },
+  "app": {
+    "windows": [],
+    "withGlobalTauri": false,
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi"],
+    "publisher": "ZeidexSoft",
+    "copyright": "© 2026 ZeidexSoft / Zeiad. Non-commercial use only (PolyForm Noncommercial 1.0.0 with Patent Defense). Commercial use strictly prohibited without written authorization.",
+    "category": "Business",
+    "shortDescription": "Yusr — accounting and management for charities",
+    "longDescription": "Fund accounting, donations and receipts, sponsorships, beneficiaries and aid, volunteers, archive, correspondence, reports and a local advisor model. Everything runs on this computer.",
+    "homepage": "https://zeidexsoft.com",
+    "license": "PolyForm-Noncommercial-1.0.0",
+    "licenseFile": "../../LICENSE",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "resources": {
+      "../resources/postgresql/": "postgresql/",
+      "../resources/llama/": "llama/",
+      "../resources/models/": "models/",
+      "../resources/web/": "web/"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "offlineInstaller",
+        "silent": true
+      },
+      "allowDowngrades": false,
+      "wix": {
+        "language": "en-US",
+        "upgradeCode": "6f1b8c2e-4d3a-4e5b-9a7c-2b9d0e4f8a61"
+      }
+    }
+  }
+}

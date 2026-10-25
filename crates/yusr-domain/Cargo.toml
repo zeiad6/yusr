@@ -1,0 +1,25 @@
+[package]
+name = "yusr-domain"
+description = "Pure domain rules for Yusr: fund accounting, Zakat, Hijri calendar, ZATCA e-invoicing, audit chain."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+base64.workspace = true
+chrono.workspace = true
+hex.workspace = true
+hmac.workspace = true
+k256.workspace = true
+rust_decimal.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+rust_decimal_macros.workspace = true

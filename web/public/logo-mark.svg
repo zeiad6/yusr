@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Yusr Logo">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f5147" />
+      <stop offset="50%" stop-color="#083832" />
+      <stop offset="100%" stop-color="#031f1c" />
+    </linearGradient>
+
+    <!-- Royal Gold Gradient -->
+    <linearGradient id="gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffe89e" />
+      <stop offset="40%" stop-color="#d4af37" />
+      <stop offset="70%" stop-color="#aa820a" />
+      <stop offset="100%" stop-color="#f3d068" />
+    </linearGradient>
+
+    <!-- Subtle Gold Line Gradient -->
+    <linearGradient id="gold-line" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffe89e" stop-opacity="0.3" />
+      <stop offset="50%" stop-color="#ffd566" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#ffe89e" stop-opacity="0.3" />
+    </linearGradient>
+
+    <!-- Luminous Halo -->
+    <radialGradient id="halo-grad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffd700" stop-opacity="0.45" />
+      <stop offset="60%" stop-color="#d4af37" stop-opacity="0.12" />
+      <stop offset="100%" stop-color="#083832" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Light Sweep Band -->
+    <linearGradient id="shimmer-band" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0" />
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.65" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Star Clip for Shimmer -->
+    <clipPath id="emblem-clip">
+      <path d="M128 36 L150 78 L196 60 L188 108 L232 128 L188 148 L196 196 L150 178 L128 220 L106 178 L60 196 L68 148 L24 128 L68 108 L60 60 L106 78 Z" />
+    </clipPath>
+  </defs>
+
+  <style>
+    .halo {
+      transform-origin: 128px 128px;
+      animation: pulse-halo 4s ease-in-out infinite;
+    }
+    .spin-slow {
+      transform-origin: 128px 128px;
+      animation: spin-clockwise 60s linear infinite;
+    }
+    .spin-reverse {
+      transform-origin: 128px 128px;
+      animation: spin-counter 45s linear infinite;
+    }
+    .shimmer-rect {
+      animation: sweep-shimmer 3.5s ease-in-out infinite;
+    }
+    .glow-core {
+      animation: pulse-glow 3s ease-in-out infinite alternate;
+      transform-origin: 128px 128px;
+    }
+
+    @keyframes pulse-halo {
+      0%, 100% { transform: scale(0.92); opacity: 0.35; }
+      50% { transform: scale(1.08); opacity: 0.75; }
+    }
+    @keyframes spin-clockwise {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes spin-counter {
+      from { transform: rotate(360deg); }
+      to { transform: rotate(0deg); }
+    }
+    @keyframes sweep-shimmer {
+      0% { transform: translateX(-260px) rotate(25deg); }
+      35%, 100% { transform: translateX(280px) rotate(25deg); }
+    }
+    @keyframes pulse-glow {
+      from { filter: drop-shadow(0 0 6px rgba(212, 175, 55, 0.5)); }
+      to { filter: drop-shadow(0 0 16px rgba(255, 232, 158, 0.95)); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .halo, .spin-slow, .spin-reverse, .shimmer-rect, .glow-core {
+        animation: none !important;
+      }
+    }
+  </style>
+
+  <!-- Container with Rounded Squircle -->
+  <rect width="256" height="256" rx="56" fill="url(#bg-grad)" stroke="#23655b" stroke-width="2.5" />
+
+  <!-- Ambient Golden Halo -->
+  <circle  cx="128" cy="128" r="96" fill="url(#halo-grad)" />
+
+  <!-- Subtle Outer Geometric Orbit -->
+  <g  opacity="0.4">
+    <circle cx="128" cy="128" r="90" fill="none" stroke="url(#gold-line)" stroke-width="1.2" stroke-dasharray="6 8" />
+    <circle cx="128" cy="38" r="2.5" fill="#ffd700" />
+    <circle cx="218" cy="128" r="2.5" fill="#ffd700" />
+    <circle cx="128" cy="218" r="2.5" fill="#ffd700" />
+    <circle cx="38" cy="128" r="2.5" fill="#ffd700" />
+  </g>
+
+  <!-- Inner Sacred Geometry Ring (Reverse rotation) -->
+  <g  opacity="0.3">
+    <polygon points="128,48 184,70 208,128 184,186 128,208 72,186 48,128 72,70" fill="none" stroke="#d4af37" stroke-width="1" stroke-dasharray="4 6" />
+  </g>
+
+  <!-- Main Professional 8-Pointed Islamic Geometric Emblem (Rub el Hizb Modernized) -->
+  <g >
+    <!-- Star Base Layer 1 -->
+    <rect x="62" y="62" width="132" height="132" rx="14" fill="none" stroke="url(#gold-grad)" stroke-width="5" />
+    <!-- Star Base Layer 2 (Rotated 45 deg) -->
+    <rect x="62" y="62" width="132" height="132" rx="14" fill="none" stroke="url(#gold-grad)" stroke-width="5" transform="rotate(45 128 128)" />
+
+    <!-- Solid Inner Star Field -->
+    <path d="M128 52 L146 84 L180 72 L172 108 L204 128 L172 148 L180 184 L146 172 L128 204 L110 172 L76 184 L84 148 L52 128 L84 108 L76 72 L110 84 Z"
+          fill="#062e28" stroke="url(#gold-grad)" stroke-width="2.5" />
+  </g>
+
+  <!-- Central Modern Yusr Monogram (Stylized Ya-Seen-Ra + Growth Curve) -->
+  <g id="central-motif">
+    <!-- Financial Growth Arc & Balance Crescent -->
+    <path d="M96 148 C96 166 112 174 128 174 C146 174 162 162 162 144 C162 128 148 120 134 116 C120 112 110 106 110 96 C110 84 122 76 136 76 C148 76 156 82 160 88" 
+          fill="none" stroke="url(#gold-grad)" stroke-width="6.5" stroke-linecap="round" />
+    
+    <!-- Foundation Ledger Bar -->
+    <line x1="88" y1="168" x2="168" y2="168" stroke="url(#gold-grad)" stroke-width="3.5" stroke-linecap="round" opacity="0.85" />
+
+    <!-- Two Golden Dots of "Yaa" (يُسر) -->
+    <circle cx="118" cy="186" r="3.5" fill="url(#gold-grad)" />
+    <circle cx="138" cy="186" r="3.5" fill="url(#gold-grad)" />
+
+    <!-- Barakah Seed (Top Diamond) -->
+    <polygon points="128,60 133,67 128,74 123,67" fill="url(#gold-grad)" />
+  </g>
+
+  <!-- Light Shimmer Pass -->
+  <g clip-path="url(#emblem-clip)">
+    <rect  x="-100" y="-50" width="80" height="360" fill="url(#shimmer-band)" />
+  </g>
+
+  <!-- Elegant Inner Border -->
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="none" stroke="url(#gold-line)" stroke-width="1.2" opacity="0.6" />
+</svg>

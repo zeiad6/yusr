@@ -1,0 +1,20 @@
+{
+  "name": "يُسر — نظام إدارة الجمعيات الخيرية",
+  "short_name": "يُسر",
+  "description": "محاسبة وإدارة الجمعيات والمؤسسات الخيرية والأوقاف ولجان الزكاة",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e2a2b",
+  "theme_color": "#0e2a2b",
+  "categories": ["finance", "business", "productivity"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/logo-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

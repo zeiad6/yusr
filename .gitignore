@@ -1,0 +1,11 @@
+/target/
+/web/node_modules/
+/web/dist/
+.env
+.yusr-jwt-secret
+/.zatca-dev/
+/app/resources/
+/app/.downloads/
+/app/src-tauri/target/
+/app/src-tauri/gen/
+*.yusrbak

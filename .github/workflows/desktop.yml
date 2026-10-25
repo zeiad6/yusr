@@ -1,0 +1,116 @@
+name: desktop
+
+# Builds the self-contained Windows installer (MSI): Yusr + PostgreSQL + llama.cpp + the
+# advisor model + the web interface. Tags matching v* also publish it as a release asset.
+on:
+  push:
+    tags: ["v*"]
+    branches: [main]
+    paths:
+      - "app/**"
+      - "crates/**"
+      - "web/**"
+      - "migrations/**"
+      - ".github/workflows/desktop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  msi:
+    runs-on: windows-latest
+    timeout-minutes: 150
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: |
+            . -> target
+            app/src-tauri -> target
+
+      - name: Cache web build
+        id: cache-web
+        uses: actions/cache@v4
+        with:
+          path: web/dist
+          key: web-dist-${{ hashFiles('web/src/**', 'web/package-lock.json', 'web/vite.config.ts') }}
+
+      - name: Build the web interface
+        if: steps.cache-web.outputs.cache-hit != 'true'
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Cache downloads & bundled resources (Resumable)
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/.downloads
+            app/resources
+          key: resources-${{ runner.os }}-${{ hashFiles('app/scripts/fetch-resources.ps1') }}
+          restore-keys: |
+            resources-${{ runner.os }}-
+            resources-
+            downloads-
+
+      - name: Fetch bundled resources
+        shell: pwsh
+        run: ./app/scripts/fetch-resources.ps1
+
+      - name: Launcher against the bundled PostgreSQL
+        shell: pwsh
+        run: |
+          $env:YUSR_TEST_PG_BIN = "$PWD\app\resources\postgresql\bin"
+          cargo test --release -p yusr-launcher -- --ignored
+
+      - name: Smoke test of the whole packaged layout (database, server, advisor model)
+        run: cargo run --release -p yusr-launcher --example smoke -- app/resources
+
+      - name: Build the MSI
+        working-directory: app
+        run: npx --yes @tauri-apps/cli@2.12.4 build --bundles msi
+
+      - name: Check the installer
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem app/src-tauri/target/release/bundle/msi/*.msi | Select-Object -First 1
+          if (-not $msi) { throw 'no MSI produced' }
+          # Windows Installer cannot open packages of 2 GB or more.
+          if ($msi.Length -ge 2GB) { throw "MSI is $($msi.Length) bytes, over the 2 GB limit" }
+          "{0} {1:N0} MB" -f $msi.Name, ($msi.Length / 1MB)
+          (Get-FileHash $msi -Algorithm SHA256).Hash | Out-File -Encoding ascii "$($msi.FullName).sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yusr-windows-msi
+          path: |
+            app/src-tauri/target/release/bundle/msi/*.msi
+            app/src-tauri/target/release/bundle/msi/*.sha256
+          retention-days: 30
+          compression-level: 0
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            app/src-tauri/target/release/bundle/msi/*.msi
+            app/src-tauri/target/release/bundle/msi/*.sha256

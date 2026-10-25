@@ -1,0 +1,63 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: yusr
+          POSTGRES_PASSWORD: yusr
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U yusr" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      YUSR_TEST_DATABASE_URL: postgres://yusr:yusr@127.0.0.1:5432/postgres
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Tests (domain, infra on a real database, server, launcher)
+        run: cargo test --workspace
+      - name: Launcher against real PostgreSQL binaries
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql >/dev/null
+          export YUSR_TEST_PG_BIN=$(dirname $(ls /usr/lib/postgresql/*/bin/pg_ctl | tail -1))
+          cargo test -p yusr-launcher -- --ignored
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D clippy::correctness
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build

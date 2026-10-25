@@ -1,0 +1,102 @@
+//! The Yusr desktop shell: one window showing the splash page while yusr-launcher starts the
+//! bundled PostgreSQL, model server and Yusr server, then the app itself.
+
+use std::sync::Mutex;
+
+use tauri::webview::NewWindowResponse;
+use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
+use yusr_launcher::{Layout, Running};
+
+const MAIN: &str = "main";
+
+/// Held so the exit handler can stop PostgreSQL and the model server cleanly.
+struct Services(Mutex<Option<Running>>);
+
+fn layout(app: &tauri::AppHandle) -> Result<Layout, String> {
+    let res = app.path().resource_dir().map_err(|e| e.to_string())?;
+    let exe = if cfg!(windows) { ".exe" } else { "" };
+    Ok(Layout {
+        data: yusr_launcher::paths::data_dir(),
+        pg_bin: res.join("postgresql").join("bin"),
+        ui_dir: res.join("web"),
+        llama_server: Some(res.join("llama").join(format!("llama-server{exe}"))),
+        model: Some(res.join("models").join("advisor.gguf")),
+    })
+}
+
+/// Text placed into the splash page's script: JSON escaping makes any message safe there.
+fn show_error(window: &tauri::WebviewWindow, message: &str) {
+    let _ = window.eval(format!("window.showError({})", serde_json::Value::String(message.to_owned())));
+}
+
+pub fn run() {
+    let data = yusr_launcher::paths::data_dir();
+    let _ = std::fs::create_dir_all(data.join("logs"));
+    let log = std::fs::File::create(data.join("logs").join("yusr.log")).ok();
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,sqlx=warn".into());
+    match log {
+        Some(file) => tracing_subscriber::fmt().with_env_filter(filter).with_ansi(false).with_writer(Mutex::new(file)).init(),
+        None => tracing_subscriber::fmt().with_env_filter(filter).init(),
+    }
+
+    let app = tauri::Builder::default()
+        // A second launch focuses the running window: two instances would fight over the
+        // same database folder.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window(MAIN) {
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
+        .manage(Services(Mutex::new(None)))
+        .setup(|app| {
+            let window = WebviewWindowBuilder::new(app, MAIN, WebviewUrl::App("index.html".into()))
+                .title("يُسر — نظام إدارة الجمعيات الخيرية")
+                .inner_size(1366.0, 800.0)
+                .min_inner_size(1000.0, 680.0)
+                .center()
+                // Receipts open in a new window from a blob: URL; let WebView2 create it.
+                .on_new_window(|_url, _features| NewWindowResponse::Allow)
+                .build()?;
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let started = match layout(&handle) {
+                    Ok(l) => yusr_launcher::start(l).await,
+                    Err(e) => Err(e),
+                };
+                match started {
+                    Ok(running) => {
+                        let mut url = format!("{}/login", running.url);
+                        if let Some(pw) = &running.first_admin_password {
+                            // A fragment never leaves the window, so the password is not sent anywhere.
+                            url.push_str(&format!("#first-run={pw}"));
+                        }
+                        *handle.state::<Services>().0.lock().expect("services lock") = Some(running);
+                        match url.parse() {
+                            Ok(u) => {
+                                if let Err(e) = window.navigate(u) {
+                                    show_error(&window, &e.to_string());
+                                }
+                            }
+                            Err(e) => show_error(&window, &format!("{e}")),
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "start failed");
+                        show_error(&window, &e);
+                    }
+                }
+            });
+            Ok(())
+        })
+        .build(tauri::generate_context!())
+        .expect("the Yusr window could not be created");
+
+    app.run(|handle, event| {
+        if let RunEvent::Exit = event {
+            if let Some(running) = handle.state::<Services>().0.lock().expect("services lock").take() {
+                running.shutdown();
+            }
+        }
+    });
+}

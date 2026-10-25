@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" fill="currentColor">
+  <g transform="translate(0,0)">
+    <rect x="62" y="62" width="132" height="132" rx="14" fill="none" stroke="currentColor" stroke-width="6" />
+    <rect x="62" y="62" width="132" height="132" rx="14" fill="none" stroke="currentColor" stroke-width="6" transform="rotate(45 128 128)" />
+    <path d="M96 148 C96 166 112 174 128 174 C146 174 162 162 162 144 C162 128 148 120 134 116 C120 112 110 106 110 96 C110 84 122 76 136 76 C148 76 156 82 160 88" 
+          fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" />
+    <line x1="88" y1="168" x2="168" y2="168" stroke="currentColor" stroke-width="4" stroke-linecap="round" />
+    <circle cx="118" cy="186" r="4" fill="currentColor" />
+    <circle cx="138" cy="186" r="4" fill="currentColor" />
+    <polygon points="128,60 133,67 128,74 123,67" fill="currentColor" />
+  </g>
+</svg>

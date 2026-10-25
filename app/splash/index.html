@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <title>يُسر</title>
+    <style>
+      :root { color-scheme: light dark; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: grid; place-items: center; font-family: "Segoe UI", Tahoma, sans-serif;
+        background: radial-gradient(circle at 30% 20%, #0f6660, #08322f 70%); color: #fff8e6;
+      }
+      main { text-align: center; max-width: 560px; padding: 24px; }
+      img { width: 112px; height: 112px; filter: drop-shadow(0 12px 30px rgba(0,0,0,.35)); }
+      h1 { margin: 18px 0 4px; font-size: 26px; }
+      p { margin: 6px 0; }
+      .bar { width: 220px; height: 4px; margin: 22px auto 0; border-radius: 4px; background: rgba(255,255,255,.15); overflow: hidden; }
+      .bar::after { content: ""; display: block; width: 40%; height: 100%; background: #e6c36f; animation: slide 1.2s ease-in-out infinite; }
+      @keyframes slide { from { transform: translateX(160%); } to { transform: translateX(-260%); } }
+      #error { display: none; margin-top: 20px; padding: 14px; border-radius: 10px; background: rgba(0,0,0,.35); text-align: start; white-space: pre-wrap; font-size: 13px; direction: ltr; }
+      @media (prefers-reduced-motion: reduce) { .bar::after { animation: none; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="logo.svg" alt="" />
+      <h1>يُسر</h1>
+      <p>نظام محاسبة وإدارة الجمعيات الخيرية</p>
+      <p id="status">جارٍ تشغيل قاعدة البيانات والخادم والمستشار المحلي…</p>
+      <div class="bar" id="bar"></div>
+      <div id="error"></div>
+    </main>
+    <script>
+      window.showError = function (message) {
+        document.getElementById("bar").style.display = "none";
+        document.getElementById("status").textContent = "تعذّر تشغيل يُسر. السجلات في مجلد البيانات (logs).";
+        var box = document.getElementById("error");
+        box.style.display = "block";
+        box.textContent = message;
+      };
+    </script>
+  </body>
+</html>
