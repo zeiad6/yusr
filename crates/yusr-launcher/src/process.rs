@@ -18,15 +18,36 @@ pub fn hidden(cmd: &mut Command) -> &mut Command {
 }
 
 /// Runs a tool to completion and returns its output, or its stderr as the error.
+/// For daemon starters (like `pg_ctl start`), stdout/stderr pipes are avoided to prevent
+/// pipe handle inheritance deadlocks on Windows where child daemons hold pipes open.
 pub fn run(program: &Path, args: &[String]) -> Result<String, String> {
-    let out = hidden(Command::new(program).args(args).stdin(Stdio::null()))
-        .output()
+    let is_daemon_starter = args.first().is_some_and(|s| s == "start");
+    if is_daemon_starter {
+        let status = hidden(
+            Command::new(program)
+                .args(args)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null()),
+        )
+        .status()
         .map_err(|e| format!("{}: {e}", program.display()))?;
-    let text = |b: &[u8]| String::from_utf8_lossy(b).trim().to_owned();
-    if out.status.success() {
-        Ok(text(&out.stdout))
+
+        if status.success() {
+            Ok(String::new())
+        } else {
+            Err(format!("{} failed ({status})", program.display()))
+        }
     } else {
-        Err(format!("{} failed ({}): {} {}", program.display(), out.status, text(&out.stderr), text(&out.stdout)))
+        let out = hidden(Command::new(program).args(args).stdin(Stdio::null()))
+            .output()
+            .map_err(|e| format!("{}: {e}", program.display()))?;
+        let text = |b: &[u8]| String::from_utf8_lossy(b).trim().to_owned();
+        if out.status.success() {
+            Ok(text(&out.stdout))
+        } else {
+            Err(format!("{} failed ({}): {} {}", program.display(), out.status, text(&out.stderr), text(&out.stdout)))
+        }
     }
 }
 

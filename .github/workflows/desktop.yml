@@ -79,6 +79,7 @@ jobs:
         shell: pwsh
         run: |
           $env:YUSR_TEST_PG_BIN = "$PWD\app\resources\postgresql\bin"
+          $env:PATH = "$PWD\app\resources\postgresql\bin;$env:PATH"
           cargo test --release -p yusr-launcher -- --ignored
 
       - name: Smoke test of the whole packaged layout (database, server, advisor model)

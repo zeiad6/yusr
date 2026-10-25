@@ -76,6 +76,9 @@ foreach ($part in 'bin', 'lib', 'share') {
 }
 # Headers, static libraries and debug symbols are not needed to run the server.
 Get-ChildItem -Path $pgOut -Recurse -Include *.pdb, *.lib, *.a | Remove-Item -Force
+if (Test-Path "$pgOut\lib") {
+    Get-ChildItem -Path "$pgOut\lib" -Filter *.dll -Recurse | Copy-Item -Destination "$pgOut\bin" -Force
+}
 Copy-VcRuntime (Join-Path $pgOut 'bin')
 if (-not (Test-Path "$pgOut\bin\initdb.exe")) { throw 'initdb.exe missing' }
 
