@@ -341,15 +341,24 @@ async fn google_login(State(s): State<AppState>, Json(req): Json<GoogleLoginRequ
     };
 
     let role = Role::parse(&role_str).unwrap_or(Role::Viewer);
-    let token = auth::issue_token(&s.jwt_secret, user_id, &username, role, 0);
-    let expires_at = (Utc::now() + chrono::Duration::hours(auth::TOKEN_TTL_HOURS)).timestamp();
+    let now = Utc::now().timestamp();
+    let exp = now + auth::TOKEN_TTL_HOURS * 3600;
+    let claims = auth::Claims {
+        sub: user_id,
+        username,
+        role,
+        ver: 0,
+        iat: now,
+        exp,
+    };
+    let token = auth::issue_token(&s.jwt_secret, &claims);
     let permissions = role.defaults().names();
 
     Ok(Json(LoginResponse {
         token,
         full_name,
         role,
-        expires_at,
+        expires_at: exp,
         permissions,
     }))
 }
