@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS gateway_transactions_queue (
     status VARCHAR(24) NOT NULL DEFAULT 'staged', -- 'staged', 'verified', 'reconciled', 'rejected'
     payload JSONB NOT NULL DEFAULT '{}'::jsonb,
     reconciled_entry_id UUID REFERENCES journal_entries(id),
-    receipt_id UUID REFERENCES receipts(id),
+    receipt_id UUID REFERENCES donations(id),
     received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     verified_at TIMESTAMPTZ,
     reconciled_at TIMESTAMPTZ,
