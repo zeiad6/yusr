@@ -20,6 +20,7 @@ argon2 = { version = "0.5", features = ["std"] }
 axum.workspace = true
 base64.workspace = true
 chrono.workspace = true
+hex.workspace = true
 hmac.workspace = true
 rand.workspace = true
 reqwest = { workspace = true, features = ["stream"] }

@@ -10,9 +10,11 @@ use axum::response::{Html, IntoResponse};
 use axum::routing::{any, get, patch, post, put};
 use axum::{Json, Router};
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
+use hmac::Mac;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use sha2::Digest;
 use uuid::Uuid;
 use yusr_domain::charity::DonationKind;
 use yusr_domain::ledger::EntryDraft;
@@ -1481,32 +1483,43 @@ pub async fn reconcile_queue_transactions(State(s): State<AppState>, a: Auth) ->
         };
 
         let donor_name = donor_name.unwrap_or_else(|| format!("متبرع بوابة {gateway}"));
-        let donation_req = yusr_infra::donations::NewDonation {
-            donor_id: None,
-            donor_name: Some(donor_name),
-            donor_phone: None,
-            donor_tax_id: None,
-            amount,
-            currency: currency.parse().unwrap_or(s.store.base_currency),
-            fund_id: target_fund,
-            project_id: None,
-            kind: DonationKind::General,
-            payment_method: match gateway.as_str() {
-                "tap" => PaymentMethod::Card,
-                "moyasar" => PaymentMethod::Card,
-                "fawry" => PaymentMethod::Wallet,
-                _ => PaymentMethod::BankTransfer,
-            },
-            notes: Some(format!("تسوية آلية لبوابة {gateway} - معرف {queue_id}")),
-            received_at: Utc::now(),
+        let donor_id: Uuid = match sqlx::query_as::<_, (Uuid,)>("SELECT id FROM donors WHERE full_name = $1 LIMIT 1")
+            .bind(&donor_name)
+            .fetch_optional(&pool)
+            .await?
+        {
+            Some((id,)) => id,
+            None => {
+                let id = Uuid::new_v4();
+                sqlx::query("INSERT INTO donors (id, is_organization, full_name, preferred_language, created_at) VALUES ($1, false, $2, 'ar', now())")
+                    .bind(id)
+                    .bind(&donor_name)
+                    .execute(&pool)
+                    .await?;
+                id
+            }
         };
 
-        let receipt = s.store.record_donation(donation_req, &actor).await?;
+        let donation_req = yusr_infra::donations::NewDonation {
+            donor_id,
+            donation_date: Utc::now().date_naive(),
+            kind: Some(DonationKind::General),
+            donor_designated: false,
+            fund_id: Some(target_fund),
+            project_id: None,
+            amount,
+            currency: currency.parse().unwrap_or(s.store.base_currency),
+            payment_method: gateway.clone(),
+            payment_ref: Some(format!("queue:{queue_id}")),
+            note: Some(format!("تسوية آلية لبوابة {gateway} - معرف {queue_id}")),
+        };
+
+        let recorded = s.store.record_donation(&donation_req, &actor).await?;
 
         sqlx::query(
             "UPDATE gateway_transactions_queue SET status = 'reconciled', receipt_id = $1, reconciled_at = now() WHERE id = $2"
         )
-        .bind(receipt.receipt_id)
+        .bind(recorded.donation_id)
         .bind(queue_id)
         .execute(&pool)
         .await?;
@@ -1555,8 +1568,8 @@ pub async fn create_transparency_report(State(s): State<AppState>, a: Auth, Json
 
     let sign_payload = format!("{}:{}:{}:{}:{}:{}", report_number, req.period_start, req.period_end, donations, aid, head_hash);
     let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(&s.jwt_secret).expect("jwt secret key");
-    hmac::Mac::update(&mut mac, sign_payload.as_bytes());
-    let signature = hex::encode(hmac::Mac::finalize(mac).into_bytes());
+    mac.update(sign_payload.as_bytes());
+    let signature = hex::encode(mac.finalize().into_bytes());
 
     let actor = a.actor();
     let metrics = json!({
