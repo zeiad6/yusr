@@ -1,0 +1,94 @@
+/* =========================================================================
+   Transitions.dev + Taste Skill Motion Tokens
+   ========================================================================= */
+
+@keyframes t-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes t-number-pop {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes t-panel-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes t-badge-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(230, 195, 111, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(230, 195, 111, 0);
+  }
+}
+
+.t-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(230, 195, 111, 0.45) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: t-shimmer 4s infinite linear;
+}
+
+.t-number-pop {
+  animation: t-number-pop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.t-panel-reveal {
+  animation: t-panel-reveal 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.t-badge-pop {
+  animation: t-badge-pulse 2.5s infinite ease-in-out;
+}
+
+/* Taste Skill: Anti-slop bespoke card spotlight surface */
+.t-glass-card {
+  background: radial-gradient(120% 120% at 50% 0%, rgba(16, 68, 64, 0.7) 0%, rgba(6, 36, 34, 0.85) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(230, 195, 111, 0.16);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.t-glass-card:hover {
+  border-color: rgba(230, 195, 111, 0.35);
+  box-shadow: 0 14px 40px -10px rgba(0, 0, 0, 0.65), 0 0 20px 0 rgba(230, 195, 111, 0.12), inset 0 1px 0 0 rgba(255, 255, 255, 0.15);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-shimmer,
+  .t-number-pop,
+  .t-panel-reveal,
+  .t-badge-pop {
+    animation: none !important;
+    transition: none !important;
+  }
+}

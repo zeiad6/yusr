@@ -56,6 +56,7 @@ impl Postgres {
 
     pub fn start_args_with_lan(&self, lan: bool) -> Vec<String> {
         let listen = if lan { "*" } else { "127.0.0.1" };
+        #[allow(unused_mut)]
         let mut opts = format!("-p {} -c listen_addresses={listen}", self.port);
         #[cfg(unix)]
         {

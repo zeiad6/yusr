@@ -170,7 +170,10 @@ pub fn llama_args(model: &Path, port: u16, bind_all: bool, mlock: bool) -> Vec<S
         // Chat templates (and the enable_thinking switch the server sends) need Jinja.
         "--jinja".into(),
     ];
-    if has_gpu {
+    if let Ok(ngl) = std::env::var("YUSR_GPU_LAYERS") {
+        args.push("--ngl".into());
+        args.push(ngl);
+    } else if has_gpu && std::env::var("YUSR_ENABLE_GPU").is_ok_and(|v| v == "1" || v == "true") {
         tracing::info!(gpu = gpu_type, "enabling GPU hardware layer offload for local LLM");
         args.push("--ngl".into());
         args.push("99".into());
@@ -211,7 +214,7 @@ pub async fn start(layout: Layout) -> Result<Running, String> {
     let database_url = pg.url(DB_USER, &db_password, DB_NAME);
     postgres::create_database(&pg.url(DB_USER, &db_password, "postgres"), DB_NAME).await?;
 
-    let mlock_enabled = std::env::var("YUSR_MODEL_MLOCK").map_or(true, |v| v != "0" && v != "false");
+    let mlock_enabled = std::env::var("YUSR_MODEL_MLOCK").is_ok_and(|v| v == "1" || v == "true");
     let llama = match (&layout.llama_server, &layout.model) {
         (Some(bin), Some(model)) if bin.exists() && model.exists() => {
             process::kill_stale(&llama_pid_file(data));

@@ -8,6 +8,7 @@ import "./store/theme";
 import "./styles/globals.css";
 import "./styles/theme.css";
 import "./styles/app.css";
+import "./components/motion/transitions.css";
 
 // Installable app with an offline shell; production builds only, so dev reloads stay fresh.
 if (import.meta.env.PROD && "serviceWorker" in navigator) {

@@ -34,7 +34,7 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[] = []) {
 
 export function PageHeader({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="page-header">
+    <div className="page-header t-panel-reveal">
       <h2>{title}</h2>
       {children && <div className="header-actions">{children}</div>}
     </div>
@@ -52,15 +52,15 @@ export function Field({ label, children, hint }: { label: string; children: Reac
 }
 
 export function Badge({ tone = "secondary", children }: { tone?: "success" | "warning" | "danger" | "info" | "secondary"; children: ReactNode }) {
-  return <span className={`badge badge-${tone}`}>{children}</span>;
+  return <span className={`badge badge-${tone} t-panel-reveal`}>{children}</span>;
 }
 
 export function StatCard({ icon, tint, value, label }: { icon: ReactNode; tint: "income" | "equity" | "assets" | "liabilities"; value: ReactNode; label: string }) {
   return (
-    <div className="stat-card">
+    <div className="stat-card t-glass-card t-panel-reveal">
       <div className={`stat-icon tint-${tint}`}>{icon}</div>
       <div className="stat-info">
-        <span className="stat-value">{value}</span>
+        <span className="stat-value t-number-pop">{value}</span>
         <span className="stat-label">{label}</span>
       </div>
     </div>

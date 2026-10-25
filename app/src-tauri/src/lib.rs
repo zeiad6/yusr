@@ -52,8 +52,8 @@ pub fn run() {
         .setup(|app| {
             let window = WebviewWindowBuilder::new(app, MAIN, WebviewUrl::App("index.html".into()))
                 .title("يُسر — نظام إدارة الجمعيات الخيرية")
-                .inner_size(1366.0, 800.0)
-                .min_inner_size(1000.0, 680.0)
+                .inner_size(1320.0, 760.0)
+                .min_inner_size(1024.0, 720.0)
                 .center()
                 // Receipts open in a new window from a blob: URL; let WebView2 create it.
                 .on_new_window(|_url, _features| NewWindowResponse::Allow)

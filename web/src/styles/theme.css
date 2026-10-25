@@ -148,3 +148,9 @@ html[data-theme="dark"] {
 .stat-value {
   font-feature-settings: "tnum" 1;
 }
+
+/* Sidebar ends gracefully 1cm after Settings with no awkward empty height */
+.sidebar-nav {
+  padding-block-end: 1cm !important;
+}
+
