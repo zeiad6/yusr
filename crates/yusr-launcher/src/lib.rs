@@ -3,12 +3,14 @@
 //! - A private PostgreSQL cluster in the user's data folder, started with the bundled
 //!   binaries through `pg_ctl` (which drops administrator rights on Windows, as PostgreSQL
 //!   requires) on a free loopback port, and stopped cleanly on exit.
-//! - The bundled llama.cpp `llama-server` with the bundled model, for the advisor.
+//! - The bundled llama.cpp `llama-server` with the bundled model, for the advisor; or, in
+//!   the package without a model, one downloaded and switched on and off from Settings.
 //! - The Yusr server itself, in-process, serving the web interface on loopback only.
 //!
 //! Nothing listens on a network interface, so no firewall prompt appears and nothing is
 //! reachable from other machines.
 
+pub mod model;
 pub mod paths;
 pub mod postgres;
 pub mod process;
@@ -16,10 +18,11 @@ pub mod process;
 use std::net::{Ipv4Addr, SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::process::Child;
+use std::sync::Arc;
 
 use base64::Engine;
 use rand::RngCore;
-use yusr_server::advisor::AdvisorSettings;
+use yusr_server::advisor::{AdvisorSettings, LocalModel};
 
 pub use postgres::Postgres;
 
@@ -35,6 +38,9 @@ pub struct Layout {
     /// `llama-server` and the GGUF model; the advisor is off when either is missing.
     pub llama_server: Option<PathBuf>,
     pub model: Option<PathBuf>,
+    /// Set when `model` is not bundled: it is downloaded to that (writable) path from here
+    /// on request, and the user starts and stops the model server.
+    pub model_download: Option<model::ModelSource>,
 }
 
 /// A running installation. Dropping it without [`Running::shutdown`] leaves PostgreSQL
@@ -45,6 +51,7 @@ pub struct Running {
     pub first_admin_password: Option<String>,
     pg: Postgres,
     llama: Option<Child>,
+    managed: Option<model::ModelManager>,
     server: tokio::task::JoinHandle<()>,
     data: PathBuf,
 }
@@ -52,6 +59,9 @@ pub struct Running {
 impl Running {
     pub fn shutdown(mut self) {
         self.server.abort();
+        if let Some(m) = self.managed.take() {
+            m.shutdown();
+        }
         if let Some(mut child) = self.llama.take() {
             let _ = child.kill();
             let _ = child.wait();
@@ -215,8 +225,15 @@ pub async fn start(layout: Layout) -> Result<Running, String> {
     postgres::create_database(&pg.url(DB_USER, &db_password, "postgres"), DB_NAME).await?;
 
     let mlock_enabled = std::env::var("YUSR_MODEL_MLOCK").is_ok_and(|v| v == "1" || v == "true");
+    let managed = match (&layout.model_download, &layout.llama_server, &layout.model) {
+        (Some(source), Some(bin), Some(model)) => Some(model::ModelManager::new(bin.clone(), model.clone(), data.clone(), source.clone(), is_lan, mlock_enabled)),
+        _ => None,
+    };
+    if let Some(m) = &managed {
+        m.autostart();
+    }
     let llama = match (&layout.llama_server, &layout.model) {
-        (Some(bin), Some(model)) if bin.exists() && model.exists() => {
+        (Some(bin), Some(model)) if managed.is_none() && bin.exists() && model.exists() => {
             process::kill_stale(&llama_pid_file(data));
             let port = free_port().map_err(|e| e.to_string())?;
             let log = std::fs::File::create(data.join("logs").join("llama-server.log")).map_err(|e| e.to_string())?;
@@ -267,10 +284,11 @@ pub async fn start(layout: Layout) -> Result<Running, String> {
     };
     let mut state = yusr_server::build_state(&cfg).await?;
     state.advisor = AdvisorSettings {
-        enabled: llama.is_some(),
+        enabled: llama.is_some() || managed.is_some(),
         url: llama.as_ref().map_or_else(|| "http://127.0.0.1:11434/v1".into(), |(_, p)| format!("http://127.0.0.1:{p}/v1")),
         model: MODEL_ALIAS.into(),
     };
+    state.local_model = managed.clone().map(|m| Arc::new(m) as Arc<dyn LocalModel>);
     yusr_server::backups::spawn_daily(state.store.clone(), data.join("backups"));
     let listener = tokio::net::TcpListener::bind(cfg.bind).await.map_err(|e| format!("bind {}: {e}", cfg.bind))?;
     let app = yusr_server::router(state, cfg.ui_dir.as_deref());
@@ -279,7 +297,7 @@ pub async fn start(layout: Layout) -> Result<Running, String> {
             tracing::error!(error = %e, "server stopped");
         }
     });
-    Ok(Running { url, first_admin_password, pg, llama: llama.map(|(c, _)| c), server, data: data.clone() })
+    Ok(Running { url, first_admin_password, pg, llama: llama.map(|(c, _)| c), managed, server, data: data.clone() })
 }
 
 fn default_organization() -> yusr_domain::receipt::Organization {

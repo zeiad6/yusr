@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "longDescription": "Fund accounting, donations and receipts, sponsorships, beneficiaries and aid, volunteers, archive, correspondence, reports and a local advisor model downloaded on request from Settings. Everything runs on this computer.",
+    "resources": {
+      "../resources/models/": null
+    }
+  }
+}

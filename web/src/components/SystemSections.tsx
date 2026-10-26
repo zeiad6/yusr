@@ -1,6 +1,6 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Bot, DatabaseBackup, Download, FileCheck2, RotateCcw, ShieldAlert } from "lucide-react";
+import { Bot, DatabaseBackup, Download, FileCheck2, Pause, Play, Power, RotateCcw, ShieldAlert } from "lucide-react";
 import { api, errorMessage } from "../api/client";
 import ConfirmModal from "./ConfirmModal";
 import { toastError, toastSuccess } from "./Toast";
@@ -175,12 +175,76 @@ interface AdvisorStatus {
   reachable: boolean;
   models: string[] | null;
   error: string | null;
+  /** Only in the desktop package that downloads its model. */
+  local?: LocalModel | null;
+}
+
+interface LocalModel {
+  state: "missing" | "downloading" | "paused" | "stopped" | "running";
+  downloaded: number;
+  total: number;
+  error: string | null;
+}
+
+/** How often the page refreshes while a download runs or the model is loading. */
+const LOCAL_MODEL_POLL_MS = 2000;
+const MB = 1024 * 1024;
+
+/** Download (in the background, resumable), start and stop the app's own model. */
+function LocalModelPanel({ local, reachable, onChange }: { local: LocalModel; reachable: boolean; onChange: () => void }) {
+  const { t } = useTranslation();
+  const { busy, run } = useSubmit();
+  const act = (action: string) => run(async () => {
+    await api.post(`/advisor/local/${action}`, {});
+    onChange();
+  });
+  const mb = (n: number) => (n / MB).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const tone = { missing: "secondary", downloading: "info", paused: "warning", stopped: "secondary", running: "success" } as const;
+  const button = {
+    missing: { action: "download", icon: <Download size={15} />, label: t("advisor.local.download") },
+    downloading: { action: "pause", icon: <Pause size={15} />, label: t("advisor.local.pause") },
+    paused: { action: "download", icon: <Play size={15} />, label: t("advisor.local.resume") },
+    stopped: { action: "start", icon: <Power size={15} />, label: t("advisor.local.start") },
+    running: { action: "stop", icon: <Power size={15} />, label: t("advisor.local.stop") },
+  }[local.state];
+  const showProgress = local.state === "downloading" || local.state === "paused";
+
+  return (
+    <div className="local-model">
+      <p className="advisor-state">
+        <Badge tone={tone[local.state]}>{t(`advisor.local.state.${local.state}`)}</Badge>
+        {local.state === "running" && !reachable && <small className="settings-hint">{t("advisor.local.loading")}</small>}
+        {local.state === "missing" && <small className="settings-hint">{t("advisor.local.missingHint")}</small>}
+      </p>
+      {showProgress && (
+        <p className="advisor-state">
+          <progress max={local.total || undefined} value={local.downloaded} />
+          <small className="settings-hint" dir="ltr">
+            {local.total ? `${mb(local.downloaded)} / ${mb(local.total)} MB` : `${mb(local.downloaded)} MB`}
+          </small>
+        </p>
+      )}
+      {local.error && <small className="settings-hint" dir="ltr">{local.error}</small>}
+      <div className="form-actions">
+        <button type="button" className={`btn ${local.state === "running" ? "btn-secondary" : "btn-primary"}`} disabled={busy} onClick={() => act(button.action)}>
+          {button.icon} {button.label}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /** Where the advisor's local model runs; admins only. */
 export function AdvisorSection() {
   const { t } = useTranslation();
   const { data, reload } = useLoad(() => api.get<AdvisorStatus>("/advisor/status"));
+  const local = data?.local;
+  const polling = local?.state === "downloading" || (local?.state === "running" && !data?.reachable);
+  useEffect(() => {
+    if (!polling) return;
+    const id = setInterval(reload, LOCAL_MODEL_POLL_MS);
+    return () => clearInterval(id);
+  }, [polling, reload]);
   const [form, setForm] = useState<{ enabled: boolean; url: string; model: string } | null>(null);
   const { busy, run } = useSubmit();
   const current = form ?? (data ? { enabled: data.enabled, url: data.url ?? "", model: data.model } : null);
@@ -210,6 +274,7 @@ export function AdvisorSection() {
           {!data.reachable && data.error && <small className="settings-hint" dir="ltr">{data.error}</small>}
         </p>
       )}
+      {local && <LocalModelPanel local={local} reachable={!!data?.reachable} onChange={reload} />}
       {current && (
         <>
           <label className="checkbox-label">

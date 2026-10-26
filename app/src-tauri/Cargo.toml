@@ -15,6 +15,10 @@ publish = false
 name = "yusr_desktop_lib"
 crate-type = ["rlib"]
 
+[features]
+# The installer without the bundled model: it is downloaded, started and stopped from Settings.
+lite = []
+
 [build-dependencies]
 tauri-build = { version = "2.7", features = [] }
 

@@ -1,0 +1,114 @@
+name: desktop-lite
+
+# Builds the lite Windows installer (MSI): the same Yusr version as desktop.yml, without the
+# bundled advisor model. The model is downloaded in the background (resumable) from Settings,
+# where the local model server can also be started and stopped. desktop.yml is untouched and
+# still builds the full installer.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Attach the lite MSI to this existing release tag (e.g. v0.2.0); empty = build only"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-lite-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  msi-lite:
+    runs-on: windows-latest
+    timeout-minutes: 150
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      # Builds the dispatched branch: the existing v0.2.0 tag predates the lite feature.
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: |
+            . -> target
+            app/src-tauri -> target
+
+      - name: Build the web interface
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      # Its own cache: the full workflow's cache holds the model, which this package leaves out.
+      - name: Cache downloads & bundled resources
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/.downloads
+            app/resources
+          key: resources-lite-${{ runner.os }}-${{ hashFiles('app/scripts/fetch-resources.ps1') }}
+          restore-keys: |
+            resources-lite-${{ runner.os }}-
+
+      - name: Fetch bundled resources (without the model)
+        shell: pwsh
+        run: ./app/scripts/fetch-resources.ps1 -NoModel
+
+      - name: Launcher against the bundled PostgreSQL
+        shell: pwsh
+        run: |
+          $env:YUSR_TEST_PG_BIN = "$PWD\app\resources\postgresql\bin"
+          $env:PATH = "$PWD\app\resources\postgresql\bin;$env:PATH"
+          cargo test --release -p yusr-launcher -- --ignored
+
+      - name: Smoke test of the packaged layout (database, server; no model)
+        run: cargo run --release -p yusr-launcher --example smoke -- app/resources --no-model
+
+      - name: Build the lite MSI
+        working-directory: app
+        run: npx --yes @tauri-apps/cli@2.12.4 build --bundles msi --features lite --config src-tauri/tauri.lite.conf.json
+
+      - name: Check and name the installer
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem app/src-tauri/target/release/bundle/msi/Yusr_*.msi | Select-Object -First 1
+          if (-not $msi) { throw 'no MSI produced' }
+          # Without the model the package must be far below the full one.
+          if ($msi.Length -ge 1GB) { throw "lite MSI is $($msi.Length) bytes: is the model still bundled?" }
+          $lite = Join-Path $msi.DirectoryName ($msi.Name -replace '^Yusr_', 'Yusr-Lite_')
+          Move-Item $msi.FullName $lite -Force
+          "{0} {1:N0} MB" -f (Split-Path -Leaf $lite), ((Get-Item $lite).Length / 1MB)
+          (Get-FileHash $lite -Algorithm SHA256).Hash | Out-File -Encoding ascii "$lite.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yusr-windows-msi-lite
+          path: |
+            app/src-tauri/target/release/bundle/msi/Yusr-Lite_*.msi
+            app/src-tauri/target/release/bundle/msi/Yusr-Lite_*.sha256
+          retention-days: 30
+          compression-level: 0
+
+      - name: Publish to the release
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
+          name: "Yusr (يُسر) v0.2.0 — Sovereign Offline Fund Accounting Suite"
+          body_path: RELEASE_NOTES.md
+          files: |
+            app/src-tauri/target/release/bundle/msi/Yusr-Lite_*.msi
+            app/src-tauri/target/release/bundle/msi/Yusr-Lite_*.sha256

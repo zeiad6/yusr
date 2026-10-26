@@ -2019,3 +2019,9 @@ body:has(.advisor-fab) .toast-stack {
     flex: 0 0 34px;
   }
 }
+
+.local-model progress {
+  flex: 1 1 200px;
+  max-width: 360px;
+  accent-color: var(--primary);
+}

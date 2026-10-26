@@ -115,6 +115,7 @@ fn json_routes() -> Router<AppState> {
         .route("/api/zakat/rates/sync", post(sync_zakat_rates))
         .route("/api/advisor/available-models", get(crate::advisor::available_models))
         .route("/api/advisor/switch-model", post(crate::advisor::switch_model))
+        .route("/api/advisor/local/{action}", post(crate::advisor::local_model))
         .route("/api/queue/transactions", get(list_queue_transactions).post(stage_queue_transaction))
         .route("/api/queue/reconcile", post(reconcile_queue_transactions))
         .route("/api/reports/transparency", get(list_transparency_reports).post(create_transparency_report))

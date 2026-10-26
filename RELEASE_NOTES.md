@@ -21,6 +21,32 @@ This release is distributed as a single, self-contained Windows Installer (`.msi
 
 ---
 
+## 🧩 Two Installers, One Version | حزمتان بنفس الإصدار
+Version `0.2.0` ships as two Windows installers. The application, database and features are identical; only the advisor model differs.
+
+| | **Full** — `Yusr_0.2.0_x64_en-US.msi` | **Lite** — `Yusr-Lite_0.2.0_x64_en-US.msi` |
+|---|---|---|
+| Advisor model (Qwen 2B GGUF) | Bundled in the installer | **Not bundled** — downloaded from Settings |
+| Installer size | Large (includes the model) | Much smaller |
+| Internet needed | Never | Once, only to download the model (everything else stays offline) |
+| Model download | — | **Download button** in Settings → Advisor; runs in the background while you keep working |
+| Resume | — | A paused, dropped or interrupted download (even after closing the app) **resumes where it stopped** |
+| Integrity | Verified SHA-256 at build time | The same pinned SHA-256 verified after download; a damaged file is discarded |
+| Start / stop the local model | Always on | **Start / Stop button** in Settings → Advisor; a stop is remembered across restarts (frees RAM/CPU) |
+| Model location | Installation folder | `%LOCALAPPDATA%\Yusr\models\advisor.gguf` |
+| Build workflow | `desktop.yml` (unchanged) | `desktop-lite.yml` |
+
+**بالعربية:**
+- **الحزمة الكاملة:** تتضمن النموذج المحلي للمستشار وتعمل دون إنترنت إطلاقاً، والنموذج يعمل دائماً.
+- **الحزمة الخفيفة (Lite):** نفس البرنامج دون النموذج، فحجمها أصغر بكثير. من **الإعدادات ← المستشار الذكي**:
+  - زر **تحميل النموذج**: يعمل في الخلفية أثناء استخدام البرنامج، مع زر إيقاف مؤقت/استئناف، ويُستأنف التحميل من حيث توقف عند انقطاع الاتصال أو إغلاق البرنامج، ثم يُتحقق من بصمة SHA-256 ويُشغَّل النموذج تلقائياً.
+  - زر **تشغيل/إيقاف النموذج المحلي**: لتحرير الذاكرة والمعالج عند عدم الحاجة، ويُحفظ الاختيار بعد إعادة التشغيل.
+- **ثبّت حزمة واحدة فقط.** للتبديل بينهما أزل الحزمة المثبتة أولاً من «التطبيقات المثبتة» ثم ثبّت الأخرى؛ البيانات محفوظة في مجلد المستخدم ولا تُحذف.
+
+> Install only one of the two. To switch, uninstall the current one first (your data in `%LOCALAPPDATA%\Yusr` is kept), then install the other.
+
+---
+
 ## 🚀 Key Architectural Modules & Features | أبرز الميزات والوحدات المعمارية
 
 ### 1. Default Credentials & Granular Access Control
@@ -63,10 +89,12 @@ This release is distributed as a single, self-contained Windows Installer (`.msi
 ---
 
 ## 🔒 Installation & Verification | التثبيت والتحقق
-1. Download `Yusr_0.2.0_x64_en-US.msi` and its matching `.sha256` checksum file.
+1. Download `Yusr_0.2.0_x64_en-US.msi` (full) or `Yusr-Lite_0.2.0_x64_en-US.msi` (lite) and its matching `.sha256` checksum file.
 2. Verify the package integrity in PowerShell:
    ```powershell
    Get-FileHash .\Yusr_0.2.0_x64_en-US.msi -Algorithm SHA256
+   Get-FileHash .\Yusr-Lite_0.2.0_x64_en-US.msi -Algorithm SHA256
    ```
 3. Run the installer. Launch Yusr from the Desktop or Start Menu.
 4. On the sign-in screen, click **تعبئة البيانات الافتراضية** (Auto-fill) to sign in with `admin` / `admin12345`.
+5. **Lite only:** open **الإعدادات ← المستشار الذكي** (Settings → Advisor) and click **تحميل النموذج** (Download the model). The advisor starts by itself once the download is verified.

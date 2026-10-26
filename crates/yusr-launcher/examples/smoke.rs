@@ -22,6 +22,7 @@ async fn main() -> Result<(), String> {
         ui_dir: res.join("web"),
         llama_server: with_model.then(|| res.join("llama").join(format!("llama-server{exe}"))),
         model: with_model.then(|| res.join("models").join("advisor.gguf")),
+        model_download: None,
     };
     let running = yusr_launcher::start(layout).await?;
     let result = check(&running.url, running.first_admin_password.as_deref().ok_or("no first-run password")?, with_model).await;

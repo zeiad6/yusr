@@ -4,6 +4,8 @@
 #   models/      the advisor model, advisor.gguf
 #   web/         the built web interface (run `npm run build` in web/ first)
 # Every download is pinned and checked against its SHA-256.
+# -NoModel leaves models/ out, for the lite installer that downloads the model from Settings.
+param([switch]$NoModel)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # the progress bar makes Invoke-WebRequest many times slower
 
@@ -94,9 +96,13 @@ Get-ChildItem -Path $llDir.FullName -Filter *.dll | Copy-Item -Destination $llOu
 Copy-VcRuntime $llOut
 
 # ---- model --------------------------------------------------------------------------
-$model = Get-Checked $MODEL_URL $MODEL_SHA256 'advisor.gguf'
-New-Item -ItemType Directory -Force -Path (Join-Path $res 'models') | Out-Null
-Copy-Item $model (Join-Path $res 'models\advisor.gguf') -Force
+if ($NoModel) {
+    Remove-Item -Recurse -Force (Join-Path $res 'models') -ErrorAction SilentlyContinue
+} else {
+    $model = Get-Checked $MODEL_URL $MODEL_SHA256 'advisor.gguf'
+    New-Item -ItemType Directory -Force -Path (Join-Path $res 'models') | Out-Null
+    Copy-Item $model (Join-Path $res 'models\advisor.gguf') -Force
+}
 
 # ---- web interface ------------------------------------------------------------------
 $dist = Join-Path $repo 'web\dist'

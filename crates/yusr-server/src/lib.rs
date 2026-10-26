@@ -28,6 +28,8 @@ pub struct AppState {
     pub public_url: String,
     /// Defaults for the advisor's model endpoint; settings stored in the database win.
     pub advisor: advisor::AdvisorSettings,
+    /// Set by the desktop package that downloads its model; `None` everywhere else.
+    pub local_model: Option<Arc<dyn advisor::LocalModel>>,
     /// Where automatic and pre-restore backups go, when set.
     pub backup_dir: Option<std::path::PathBuf>,
 }
@@ -119,6 +121,7 @@ pub async fn build_state(cfg: &Config) -> Result<AppState, String> {
         zatca,
         public_url: cfg.public_url.clone(),
         advisor: advisor::AdvisorSettings::from_env(),
+        local_model: None,
         backup_dir: cfg.backup_dir.as_ref().map(std::path::PathBuf::from),
     })
 }

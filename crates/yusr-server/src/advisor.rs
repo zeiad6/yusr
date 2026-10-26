@@ -42,18 +42,61 @@ impl AdvisorSettings {
     }
 }
 
+/// A model server the app runs itself and the user controls from Settings: the desktop
+/// package without a bundled model downloads it, then starts and stops it on request.
+pub trait LocalModel: Send + Sync {
+    /// Base URL (ending in `/v1`) while the model server is running.
+    fn endpoint(&self) -> Option<String>;
+    /// State for the Settings page: `missing`, `downloading`, `paused`, `stopped` or `running`.
+    fn status(&self) -> Value;
+    /// Starts the download in the background, resuming a partial file.
+    fn download(&self) -> Result<(), String>;
+    /// Stops the download and keeps what was fetched for a later resume.
+    fn pause(&self);
+    fn start(&self) -> Result<(), String>;
+    fn stop(&self);
+}
+
 /// Stored settings override the server's defaults field by field.
 async fn settings(s: &AppState) -> ApiResult<AdvisorSettings> {
     let (stored,): (Value,) = sqlx::query_as("SELECT advisor FROM settings").fetch_one(&s.store.pool).await?;
     let d = &s.advisor;
+    // A running app-managed model changes port on every start, so a stored URL never wins over it.
+    let local = s.local_model.as_ref().and_then(|m| m.endpoint());
+    let url = match &local {
+        Some(u) => u.as_str(),
+        None => stored["url"].as_str().filter(|u| !u.is_empty()).unwrap_or(&d.url),
+    };
     Ok(AdvisorSettings {
         enabled: stored["enabled"].as_bool().unwrap_or(d.enabled),
-        url: stored["url"].as_str().filter(|u| !u.is_empty()).unwrap_or(&d.url).trim_end_matches('/').to_owned(),
+        url: url.trim_end_matches('/').to_owned(),
         model: stored["model"].as_str().filter(|m| !m.is_empty()).unwrap_or(&d.model).to_owned(),
     })
 }
 
-fn client(timeout: std::time::Duration) -> reqwest::Client {
+/// Download, pause, start or stop the app-managed model; 404 where there is none.
+pub async fn local_model(State(s): State<AppState>, a: Auth, axum::extract::Path(action): axum::extract::Path<String>) -> ApiResult<Json<Value>> {
+    a.require(Permission::AdvisorManage)?;
+    let m = s.local_model.as_ref().ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "not_found", "this installation has no app-managed model"))?;
+    let failed = |e: String| ApiError::new(StatusCode::CONFLICT, "local_model", e);
+    match action.as_str() {
+        "download" => m.download().map_err(failed)?,
+        "pause" => m.pause(),
+        "start" => m.start().map_err(failed)?,
+        "stop" => m.stop(),
+        _ => return Err(ApiError::new(StatusCode::NOT_FOUND, "not_found", "unknown action")),
+    }
+    let actor = a.actor();
+    let value = json!({ "action": action });
+    yusr_infra::serializable!(s.store, |conn| {
+        yusr_infra::audit::append(conn, &actor, "update", "settings", "advisor_local_model", value.clone()).await?;
+        Ok(())
+    })?;
+    Ok(Json(m.status()))
+}
+
+/// HTTP client with the TLS provider installed; `timeout` bounds each read, not the whole body.
+pub fn client(timeout: std::time::Duration) -> reqwest::Client {
     let _ = rustls::crypto::ring::default_provider().install_default();
     reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(5))
@@ -88,6 +131,7 @@ pub async fn status(State(s): State<AppState>, a: Auth) -> ApiResult<Json<Value>
         "reachable": probe.is_ok(),
         "models": probe.as_ref().ok(),
         "error": probe.err(),
+        "local": s.local_model.as_ref().filter(|_| manage).map(|m| m.status()),
     })))
 }
 
