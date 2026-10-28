@@ -33,8 +33,11 @@ impl ModelSource {
     }
 }
 
-/// Retries after a dropped connection before the download reports an error.
-const ATTEMPTS: u64 = 5;
+/// Consecutive attempts that fetch nothing before the download reports an error; a drop
+/// after some progress starts the count again, so a flaky line still finishes.
+const ATTEMPTS: u64 = 8;
+/// Wait before the first retry, growing by this much with each failure in a row.
+const RETRY_STEP: Duration = if cfg!(test) { Duration::from_millis(10) } else { Duration::from_secs(5) };
 /// A stalled connection counts as dropped after this long without a byte.
 const READ_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -215,14 +218,20 @@ async fn fetch(s: &Shared) -> Result<(), String> {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
     let http = yusr_server::advisor::client(READ_TIMEOUT);
-    for attempt in 1..=ATTEMPTS {
+    let size = |p: &Path| std::fs::metadata(p).map_or(0, |m| m.len());
+    let mut failures = 0u32;
+    loop {
+        let before = size(&part);
         match fetch_once(s, &http, &part).await {
             Ok(()) => break,
-            Err(e) if attempt < ATTEMPTS => {
-                tracing::warn!(error = %e, attempt, "model download interrupted; resuming");
-                tokio::time::sleep(Duration::from_secs(5 * attempt)).await;
+            Err(e) => {
+                failures = if size(&part) > before { 1 } else { failures + 1 };
+                if u64::from(failures) >= ATTEMPTS {
+                    return Err(e);
+                }
+                tracing::warn!(error = %e, failures, "model download interrupted; resuming");
+                tokio::time::sleep(RETRY_STEP * failures).await;
             }
-            Err(e) => return Err(e),
         }
     }
     let file = part.clone();
@@ -347,6 +356,67 @@ mod tests {
         assert!(!m.0.part().exists());
         // Downloaded and verified; starting fails here only because there is no llama-server.
         assert_eq!(s["state"], "stopped");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Honours ranges but drops every connection after 50 kB, like a weak mobile line.
+    async fn serve_flaky(body: Vec<u8>) -> String {
+        use axum::http::{HeaderMap, StatusCode, header};
+        const PER_CONNECTION: usize = 50_000;
+        let body = Arc::new(body);
+        let app = axum::Router::new().route(
+            "/m.gguf",
+            axum::routing::get(move |headers: HeaderMap| {
+                let body = body.clone();
+                async move {
+                    let start = headers
+                        .get(header::RANGE)
+                        .and_then(|v| v.to_str().ok()?.strip_prefix("bytes=")?.trim_end_matches('-').parse::<usize>().ok())
+                        .unwrap_or(0);
+                    let rest = body[start..].to_vec();
+                    let first = axum::body::Bytes::from(rest[..rest.len().min(PER_CONNECTION)].to_vec());
+                    let drops = rest.len() > PER_CONNECTION;
+                    // The pause lets the bytes reach the client before the connection breaks.
+                    let stream = futures_util::stream::unfold(0u8, move |step| {
+                        let first = first.clone();
+                        async move {
+                            match step {
+                                0 => Some((Ok::<_, std::io::Error>(first), 1)),
+                                1 if drops => {
+                                    tokio::time::sleep(Duration::from_millis(50)).await;
+                                    Some((Err(std::io::Error::other("connection dropped")), 2))
+                                }
+                                _ => None,
+                            }
+                        }
+                    });
+                    let status = if start > 0 { StatusCode::PARTIAL_CONTENT } else { StatusCode::OK };
+                    axum::response::Response::builder()
+                        .status(status)
+                        .header(header::CONTENT_LENGTH, rest.len())
+                        .body(axum::body::Body::from_stream(stream))
+                        .unwrap()
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        format!("http://{addr}/m.gguf")
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn download_survives_more_drops_than_attempts() {
+        // 12 drops, more than ATTEMPTS, each after progress.
+        let body: Vec<u8> = (0..600_000u32).map(|i| (i % 241) as u8).collect();
+        let (dir, mut m) = download_case(&[], &[], &body);
+        std::fs::remove_file(m.0.part()).unwrap();
+        Arc::get_mut(&mut m.0).unwrap().source.url = serve_flaky(body.clone()).await;
+        m.download().unwrap();
+        let s = finished(&m).await;
+        // Downloaded and verified; only starting fails here, as there is no llama-server.
+        assert_eq!(s["state"], "stopped", "{s}");
+        assert_eq!(std::fs::read(&m.0.model).unwrap(), body);
         std::fs::remove_dir_all(dir).unwrap();
     }
 

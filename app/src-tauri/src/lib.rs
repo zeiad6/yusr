@@ -36,7 +36,46 @@ fn show_error(window: &tauri::WebviewWindow, message: &str) {
     let _ = window.eval(format!("window.showError({})", serde_json::Value::String(message.to_owned())));
 }
 
+/// Ensures the app and its database are registered to start automatically on system boot.
+fn ensure_autostart_on_boot() {
+    #[cfg(windows)]
+    {
+        if let Ok(exe_path) = std::env::current_exe() {
+            let exe_str = exe_path.display().to_string();
+            let _ = std::process::Command::new("reg")
+                .args(&[
+                    "add",
+                    r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+                    "/v",
+                    "Yusr",
+                    "/t",
+                    "REG_SZ",
+                    "/d",
+                    &format!("\"{exe_str}\""),
+                    "/f",
+                ])
+                .output();
+        }
+    }
+    #[cfg(unix)]
+    {
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Ok(home) = std::env::var("HOME") {
+                let autostart_dir = std::path::PathBuf::from(home).join(".config").join("autostart");
+                let _ = std::fs::create_dir_all(&autostart_dir);
+                let desktop_file = autostart_dir.join("yusr.desktop");
+                let content = format!(
+                    "[Desktop Entry]\nType=Application\nName=Yusr\nExec=\"{}\"\nHidden=false\nNoDisplay=false\nX-GNOME-Autostart-enabled=true\n",
+                    exe_path.display()
+                );
+                let _ = std::fs::write(desktop_file, content);
+            }
+        }
+    }
+}
+
 pub fn run() {
+    ensure_autostart_on_boot();
     let data = yusr_launcher::paths::data_dir();
     let _ = std::fs::create_dir_all(data.join("logs"));
     let log = std::fs::File::create(data.join("logs").join("yusr.log")).ok();
@@ -59,8 +98,8 @@ pub fn run() {
         .setup(|app| {
             let window = WebviewWindowBuilder::new(app, MAIN, WebviewUrl::App("index.html".into()))
                 .title("يُسر — نظام إدارة الجمعيات الخيرية")
-                .inner_size(1320.0, 760.0)
-                .min_inner_size(1024.0, 720.0)
+                .inner_size(1080.0, 680.0)
+                .min_inner_size(880.0, 580.0)
                 .center()
                 // Receipts open in a new window from a blob: URL; let WebView2 create it.
                 .on_new_window(|_url, _features| NewWindowResponse::Allow)

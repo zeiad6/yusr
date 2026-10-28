@@ -15,7 +15,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["msi"],
+    "targets": ["msi", "deb"],
     "publisher": "ZeidexSoft",
     "copyright": "© 2026 ZeidexSoft / Zeiad. Non-commercial use only (PolyForm Noncommercial 1.0.0 with Patent Defense). Commercial use strictly prohibited without written authorization.",
     "category": "Business",
@@ -45,7 +45,23 @@
       "allowDowngrades": false,
       "wix": {
         "language": "en-US",
-        "upgradeCode": "6f1b8c2e-4d3a-4e5b-9a7c-2b9d0e4f8a61"
+        "upgradeCode": "6f1b8c2e-4d3a-4e5b-9a7c-2b9d0e4f8a61",
+        "fragmentPaths": ["wix/autostart.wxs"],
+        "componentRefs": ["YusrBootAutostartShortcut"]
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "postgresql (>= 14)",
+          "postgresql-contrib (>= 14)",
+          "libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37"
+        ],
+        "files": {
+          "/lib/systemd/system/yusr.service": "packaging/linux/yusr.service"
+        },
+        "postInstallScript": "packaging/linux/postinst.sh",
+        "preRemoveScript": "packaging/linux/prerm.sh"
       }
     }
   }

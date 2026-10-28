@@ -1619,7 +1619,7 @@ pub async fn create_transparency_report(State(s): State<AppState>, a: Auth, Json
     let head_hash = verify_rep.head_hash.unwrap_or_else(|| "0".repeat(64));
 
     let (donations,): (Decimal,) = sqlx::query_as(
-        "SELECT COALESCE(SUM(amount), 0) FROM donations WHERE issued_at::date BETWEEN $1 AND $2"
+        "SELECT COALESCE(SUM(base_amount), 0) FROM donations WHERE donation_date BETWEEN $1 AND $2"
     )
     .bind(req.period_start)
     .bind(req.period_end)

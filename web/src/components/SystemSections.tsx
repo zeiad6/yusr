@@ -268,7 +268,8 @@ export function AdvisorSection() {
         </h3>
         <small className="settings-hint">{t("advisor.settingsHint")}</small>
       </div>
-      {data && (
+      {/* The app's own model reports its state below; the endpoint probe only matters once it runs. */}
+      {data && (!local || local.state === "running") && (
         <p className="advisor-state">
           {data.reachable ? <Badge tone="success">{t("advisor.connected")}</Badge> : <Badge tone="warning">{t("advisor.notConnected")}</Badge>}
           {!data.reachable && data.error && <small className="settings-hint" dir="ltr">{data.error}</small>}

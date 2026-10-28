@@ -8,4 +8,5 @@
 /app/.downloads/
 /app/src-tauri/target/
 /app/src-tauri/gen/
+/brag-output/
 *.yusrbak

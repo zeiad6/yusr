@@ -11,7 +11,8 @@ on:
       - "crates/**"
       - "web/**"
       - "migrations/**"
-      - ".github/workflows/desktop.yml"
+      - "packaging/**"
+      - ".github/workflows/**"
   workflow_dispatch:
 
 permissions:

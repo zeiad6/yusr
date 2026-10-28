@@ -159,11 +159,45 @@ cd ..
 # 3. Test launcher and run smoke tests
 cargo run --release -p yusr-launcher --example smoke -- app/resources
 
-# 4. Generate the Windows MSI installer
+# 4. Generate the Windows MSI installer (with boot autostart)
 cd app
 npx --yes @tauri-apps/cli@2.12.4 build --bundles msi
 ```
 The generated MSI will be placed in `app/src-tauri/target/release/bundle/msi/`.
+
+---
+
+## 🚀 Installation Packages & Automated Boot Services (حزم التثبيت والتشغيل التلقائي)
+
+All distribution packages and setup scripts provide out-of-the-box database lifecycle management:
+
+1. **Automatic Database Installation**: Automatically provisions or bundles PostgreSQL.
+2. **Database & Role Provisioning**: Creates user `yusr` and isolated database `yusr` with UTF-8 encoding.
+3. **Verified Connection**: Auto-generates `DATABASE_URL` and validates connection readiness before service start.
+4. **Boot Autostart**: Configures and enables system-level services so both the database and Yusr run automatically upon machine startup.
+
+### 🐧 Linux Server / Desktop All-In-One Setup
+Run the unified installer as root to install PostgreSQL, configure the database, and enable systemd auto-start on boot:
+```bash
+sudo bash tools/install.sh
+```
+
+### 📦 Debian / Ubuntu Package (.deb)
+Build and install the `.deb` package with full PostgreSQL dependencies and systemd lifecycle hooks:
+```bash
+# Build deb bundle
+cd app
+npx --yes @tauri-apps/cli@2.12.4 build --bundles deb
+
+# Install deb package
+sudo dpkg -i src-tauri/target/release/bundle/deb/*.deb
+```
+
+### 🪟 Windows Boot Autostart & Service Setup
+Configure PostgreSQL cluster and register boot startup via PowerShell:
+```powershell
+powershell -ExecutionPolicy Bypass -File ./tools/install-autostart.ps1
+```
 
 ---
 

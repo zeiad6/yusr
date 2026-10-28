@@ -1,0 +1,26 @@
+[Unit]
+Description=Yusr - Autonomous Fund Accounting & Management Suite for Charities
+Documentation=https://github.com/zeiad6/yusr
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/yusr
+EnvironmentFile=-/etc/yusr/yusr.env
+ExecStart=/usr/local/bin/yusr-server
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+LimitNOFILE=65536
+
+# Security Hardening
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target

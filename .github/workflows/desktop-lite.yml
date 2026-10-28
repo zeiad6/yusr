@@ -7,6 +7,14 @@ name: desktop-lite
 on:
   push:
     tags: ["v*"]
+    branches: [main]
+    paths:
+      - "app/**"
+      - "crates/**"
+      - "web/**"
+      - "migrations/**"
+      - "packaging/**"
+      - ".github/workflows/**"
   workflow_dispatch:
     inputs:
       release_tag:

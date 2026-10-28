@@ -82,9 +82,16 @@ Version `0.2.0` ships as two Windows installers. The application, database and f
 - Export tamper-evident financial reports embedded with the latest SHA-256 ledger block hash and verifiable QR code.
 - Dedicated auditor verification page (`/verify/report`).
 
-### 9. Neo-Andalusian Sovereign Design Language
+### 9. Neo-Andalusian Sovereign Design Language & Medium Desktop Frame
 - UI micro-interactions powered by GSAP, Transitions.dev, and React Bits (`SpotlightCard`, `ShinyText`, `CountUp`, `MagneticButton`).
-- Sidebar geometry mathematically fitted to terminate exactly 1cm after Settings with zero excess height.
+- Ergonomically resized to a balanced **Medium Desktop Interface** (1080x680 with 880x580 minimum) for optimal visibility without cluttering smaller displays.
+- Sidebar geometry mathematically fitted to terminate cleanly after Settings with zero excess height.
+
+### 10. Automated Database Lifecycle & Boot Autostart (دمج قاعدة البيانات والتشغيل التلقائي)
+- **Automatic Database Setup**: Automatically installs and configures PostgreSQL across all packages.
+- **Database & Role Creation**: Automatically provisions `yusr` database and role with secure authentication.
+- **Connection Verification**: Auto-configures `DATABASE_URL` with health checks.
+- **Boot Autostart**: Services and desktop app are configured to run automatically on system startup (Systemd on Linux, Windows Registry Run & WiX shortcuts on Windows).
 
 ---
 
