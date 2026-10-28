@@ -1130,6 +1130,9 @@
     },
     "local": {
       "download": "Download the model",
+      "downloadNow": "Download Local Model Now",
+      "downloadLater": "Download Later via Settings",
+      "promptTitle": "Smart Advisor (Local Model)",
       "pause": "Pause download",
       "resume": "Resume download",
       "start": "Start the local model",

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { AlertOctagon, AlertTriangle, Bot, Info, Send, Sparkles, Square, X } from "lucide-react";
+import { AlertOctagon, AlertTriangle, Bot, Download, Info, Pause, Play, Send, Sparkles, Square, X } from "lucide-react";
 import { api, errorMessage } from "../api/client";
 import { useAuthStore } from "../store/auth";
 
@@ -52,9 +52,68 @@ export default function AdvisorWidget() {
   const [chatError, setChatError] = useState<string | null>(null);
   const [models, setModels] = useState<Array<{ name: string; filename: string; size_bytes: number; is_active: boolean }>>([]);
   const [activeModel, setActiveModel] = useState<string>("");
+  const [localStatus, setLocalStatus] = useState<{
+    state: "missing" | "downloading" | "paused" | "stopped" | "running";
+    downloaded: number;
+    total: number;
+    error?: string;
+  } | null>(null);
+  const [dismissPrompt, setDismissPrompt] = useState(false);
+  const [busyLocal, setBusyLocal] = useState(false);
   const abort = useRef<AbortController | null>(null);
   const end = useRef<HTMLDivElement>(null);
   const allowed = can("advisor.use");
+
+  const checkStatus = useCallback(() => {
+    api.get<{ reachable: boolean; local?: { state: "missing" | "downloading" | "paused" | "stopped" | "running"; downloaded: number; total: number; error?: string } }>("/advisor/status")
+      .then((res) => {
+        if (res.local) setLocalStatus(res.local);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!allowed || !open) return;
+    checkStatus();
+    const interval = setInterval(checkStatus, localStatus?.state === "downloading" ? 1500 : 6000);
+    return () => clearInterval(interval);
+  }, [allowed, open, checkStatus, localStatus?.state]);
+
+  const handleDownloadNow = async () => {
+    try {
+      setBusyLocal(true);
+      await api.post("/advisor/local/download", {});
+      checkStatus();
+    } catch (e) {
+      setChatError(errorMessage(e));
+    } finally {
+      setBusyLocal(false);
+    }
+  };
+
+  const handlePause = async () => {
+    try {
+      setBusyLocal(true);
+      await api.post("/advisor/local/pause", {});
+      checkStatus();
+    } catch (e) {
+      setChatError(errorMessage(e));
+    } finally {
+      setBusyLocal(false);
+    }
+  };
+
+  const handleStart = async () => {
+    try {
+      setBusyLocal(true);
+      await api.post("/advisor/local/start", {});
+      checkStatus();
+    } catch (e) {
+      setChatError(errorMessage(e));
+    } finally {
+      setBusyLocal(false);
+    }
+  };
 
   const loadModels = useCallback(() => {
     api.get<Array<{ name: string; filename: string; size_bytes: number; is_active: boolean }>>("/advisor/available-models")
@@ -238,6 +297,109 @@ export default function AdvisorWidget() {
             </div>
           ) : (
             <div className="advisor-chat">
+              {localStatus?.state === "missing" && !dismissPrompt && (
+                <div style={{
+                  margin: "10px 14px 4px",
+                  padding: "12px",
+                  borderRadius: "8px",
+                  background: "rgba(15, 102, 96, 0.12)",
+                  border: "1px solid rgba(15, 102, 96, 0.3)",
+                  textAlign: "start"
+                }}>
+                  <strong style={{ display: "block", marginBottom: "4px", fontSize: "13px" }}>
+                    🤖 {t("advisor.local.promptTitle")}
+                  </strong>
+                  <p style={{ margin: "0 0 10px", fontSize: "12px", color: "var(--text-muted)" }}>
+                    {t("advisor.local.missingHint")}
+                  </p>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ padding: "4px 10px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                      onClick={handleDownloadNow}
+                      disabled={busyLocal}
+                    >
+                      <Download size={13} />
+                      {t("advisor.local.downloadNow")}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: "4px 10px", fontSize: "12px" }}
+                      onClick={() => setDismissPrompt(true)}
+                    >
+                      {t("advisor.local.downloadLater")}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {(localStatus?.state === "downloading" || localStatus?.state === "paused") && (
+                <div style={{
+                  margin: "10px 14px 4px",
+                  padding: "12px",
+                  borderRadius: "8px",
+                  background: "rgba(15, 102, 96, 0.12)",
+                  border: "1px solid rgba(15, 102, 96, 0.3)",
+                  textAlign: "start"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <strong style={{ fontSize: "12px" }}>
+                      {localStatus.state === "downloading"
+                        ? `⏳ ${t("advisor.local.state.downloading")}…`
+                        : `⏸️ ${t("advisor.local.state.paused")}`}
+                    </strong>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: "2px 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                      onClick={localStatus.state === "downloading" ? handlePause : handleDownloadNow}
+                      disabled={busyLocal}
+                    >
+                      {localStatus.state === "downloading" ? (
+                        <><Pause size={11} /> {t("advisor.local.pause")}</>
+                      ) : (
+                        <><Play size={11} /> {t("advisor.local.resume")}</>
+                      )}
+                    </button>
+                  </div>
+                  <progress
+                    style={{ width: "100%", height: "6px", borderRadius: "3px" }}
+                    max={localStatus.total || undefined}
+                    value={localStatus.downloaded}
+                  />
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginTop: "4px", color: "var(--text-muted)" }}>
+                    <span>{((localStatus.downloaded / (1024 * 1024)) || 0).toFixed(0)} MB / {((localStatus.total / (1024 * 1024)) || 0).toFixed(0)} MB</span>
+                    <span>{localStatus.total ? `${Math.round((localStatus.downloaded / localStatus.total) * 100)}%` : ""}</span>
+                  </div>
+                </div>
+              )}
+
+              {localStatus?.state === "stopped" && (
+                <div style={{
+                  margin: "10px 14px 4px",
+                  padding: "10px 12px",
+                  borderRadius: "8px",
+                  background: "rgba(255, 255, 255, 0.05)",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center"
+                }}>
+                  <span style={{ fontSize: "12px" }}>{t("advisor.local.state.stopped")}</span>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ padding: "3px 10px", fontSize: "12px" }}
+                    onClick={handleStart}
+                    disabled={busyLocal}
+                  >
+                    {t("advisor.local.start")}
+                  </button>
+                </div>
+              )}
+
               <div className="advisor-body chat-log" aria-live="polite">
                 {messages.length === 0 && (
                   <div className="advisor-welcome">

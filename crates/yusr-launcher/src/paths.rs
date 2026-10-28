@@ -10,6 +10,51 @@ pub fn is_ascii_path(p: &Path) -> bool {
     p.to_str().is_some_and(|s| s.is_ascii())
 }
 
+/// Cleans Windows paths by removing Win32 verbatim extended-length prefixes (`\\?\` and `//?/`)
+/// and normalizing all slashes to backslashes on Windows. External console tools like PostgreSQL's
+/// `initdb.exe` and `pg_ctl.exe` spawn sub-tools via `cmd.exe` / `popen`, which fail with
+/// "The system cannot find the path specified" when encountering verbatim prefixes.
+pub fn clean_path(p: impl AsRef<Path>) -> PathBuf {
+    let s = p.as_ref().to_string_lossy();
+    if let Some(stripped) = s.strip_prefix(r"\\?\UNC\") {
+        let normalized = format!(r"\\{stripped}").replace('/', "\\");
+        return PathBuf::from(normalized);
+    }
+    if let Some(stripped) = s.strip_prefix("//?/UNC/") {
+        let normalized = format!(r"\\{stripped}").replace('/', "\\");
+        return PathBuf::from(normalized);
+    }
+    if let Some(stripped) = s.strip_prefix(r"\\?\") {
+        #[cfg(windows)]
+        {
+            return PathBuf::from(stripped.replace('/', "\\"));
+        }
+        #[cfg(not(windows))]
+        {
+            return PathBuf::from(stripped);
+        }
+    }
+    if let Some(stripped) = s.strip_prefix("//?/") {
+        #[cfg(windows)]
+        {
+            return PathBuf::from(stripped.replace('/', "\\"));
+        }
+        #[cfg(not(windows))]
+        {
+            return PathBuf::from(stripped);
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        PathBuf::from(s.replace('/', "\\"))
+    }
+    #[cfg(not(windows))]
+    {
+        p.as_ref().to_path_buf()
+    }
+}
+
 /// `%LOCALAPPDATA%\Yusr` when that path is ASCII, else `%PROGRAMDATA%\Yusr\u-<hash of the
 /// user's folder>` (users may create folders under ProgramData; the hash keeps two
 /// Windows accounts apart without putting their names in the path). Elsewhere, the XDG
@@ -52,5 +97,14 @@ mod tests {
         assert_eq!(a, user_key(Path::new(r"C:\Users\علي\AppData\Local")));
         assert_ne!(a, user_key(Path::new(r"C:\Users\منى\AppData\Local")));
         assert!(a.is_ascii() && a.starts_with("u-") && a.len() == 14);
+    }
+
+    #[test]
+    fn cleans_extended_verbatim_path_prefixes() {
+        let p1 = clean_path(r"\\?\C:\Program Files\Yusr\postgresql\bin");
+        assert_eq!(p1, PathBuf::from(r"C:\Program Files\Yusr\postgresql\bin"));
+
+        let p2 = clean_path("//?/C:/Program Files/Yusr/postgresql/bin");
+        assert_eq!(p2, PathBuf::from(if cfg!(windows) { r"C:\Program Files\Yusr\postgresql\bin" } else { "C:/Program Files/Yusr/postgresql/bin" }));
     }
 }

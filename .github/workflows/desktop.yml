@@ -1,7 +1,8 @@
 name: desktop
 
-# Builds the self-contained Windows installer (MSI): Yusr + PostgreSQL + llama.cpp + the
-# advisor model + the web interface. Tags matching v* also publish it as a release asset.
+# Builds the self-contained Windows installer (MSI): Yusr + PostgreSQL + llama.cpp + system DLLs + web interface.
+# The heavy local AI/ML model is excluded from the build artifact and release asset (< 150 MB),
+# and is downloaded on-demand by the end-user post-installation. Tags matching v* also publish it as a release asset.
 on:
   push:
     tags: ["v*"]
@@ -66,15 +67,14 @@ jobs:
           path: |
             app/.downloads
             app/resources
-          key: resources-${{ runner.os }}-${{ hashFiles('app/scripts/fetch-resources.ps1') }}
+          key: resources-selfcontained-${{ runner.os }}-${{ hashFiles('app/scripts/fetch-resources.ps1') }}
           restore-keys: |
+            resources-selfcontained-${{ runner.os }}-
             resources-${{ runner.os }}-
-            resources-
-            downloads-
 
-      - name: Fetch bundled resources
+      - name: Fetch bundled resources (excluding heavy local model)
         shell: pwsh
-        run: ./app/scripts/fetch-resources.ps1
+        run: ./app/scripts/fetch-resources.ps1 -NoModel
 
       - name: Launcher against the bundled PostgreSQL
         shell: pwsh
@@ -83,8 +83,8 @@ jobs:
           $env:PATH = "$PWD\app\resources\postgresql\bin;$env:PATH"
           cargo test --release -p yusr-launcher -- --ignored
 
-      - name: Smoke test of the whole packaged layout (database, server, advisor model)
-        run: cargo run --release -p yusr-launcher --example smoke -- app/resources
+      - name: Smoke test of the packaged layout (database, server; on-demand model)
+        run: cargo run --release -p yusr-launcher --example smoke -- app/resources --no-model
 
       - name: Build the MSI
         working-directory: app
@@ -95,8 +95,8 @@ jobs:
         run: |
           $msi = Get-ChildItem app/src-tauri/target/release/bundle/msi/*.msi | Select-Object -First 1
           if (-not $msi) { throw 'no MSI produced' }
-          # Windows Installer cannot open packages of 2 GB or more.
-          if ($msi.Length -ge 2GB) { throw "MSI is $($msi.Length) bytes, over the 2 GB limit" }
+          # Without the heavy model, package size should be around 100-200 MB.
+          if ($msi.Length -ge 1GB) { throw "MSI is $($msi.Length) bytes, over the 1 GB limit: model should not be bundled" }
           "{0} {1:N0} MB" -f $msi.Name, ($msi.Length / 1MB)
           (Get-FileHash $msi -Algorithm SHA256).Hash | Out-File -Encoding ascii "$($msi.FullName).sha256"
 

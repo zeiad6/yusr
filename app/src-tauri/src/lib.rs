@@ -13,22 +13,26 @@ const MAIN: &str = "main";
 struct Services(Mutex<Option<Running>>);
 
 fn layout(app: &tauri::AppHandle) -> Result<Layout, String> {
-    let res = app.path().resource_dir().map_err(|e| e.to_string())?;
+    let raw_res = app.path().resource_dir().map_err(|e| e.to_string())?;
+    let res = yusr_launcher::paths::clean_path(raw_res);
     let exe = if cfg!(windows) { ".exe" } else { "" };
+    let bundled_model = res.join("models").join("advisor.gguf");
+    let (model, model_download) = if bundled_model.exists() {
+        (Some(bundled_model), None)
+    } else {
+        (
+            Some(yusr_launcher::paths::data_dir().join("models").join("advisor.gguf")),
+            Some(yusr_launcher::model::ModelSource::advisor()),
+        )
+    };
     Ok(Layout {
         data: yusr_launcher::paths::data_dir(),
         pg_bin: res.join("postgresql").join("bin"),
         ui_dir: res.join("web"),
         llama_server: Some(res.join("llama").join(format!("llama-server{exe}"))),
-        model: Some(model_path(&res)),
-        model_download: cfg!(feature = "lite").then(yusr_launcher::model::ModelSource::advisor),
+        model,
+        model_download,
     })
-}
-
-/// The full package ships the model; the lite one downloads it into the data folder.
-fn model_path(res: &std::path::Path) -> std::path::PathBuf {
-    let dir = if cfg!(feature = "lite") { yusr_launcher::paths::data_dir() } else { res.to_path_buf() };
-    dir.join("models").join("advisor.gguf")
 }
 
 /// Text placed into the splash page's script: JSON escaping makes any message safe there.

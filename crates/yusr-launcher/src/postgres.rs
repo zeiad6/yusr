@@ -23,7 +23,12 @@ fn exe(name: &str) -> String {
 
 impl Postgres {
     pub fn new(bin: PathBuf, data: PathBuf, log: PathBuf, port: u16) -> Self {
-        Self { bin, data, log, port }
+        Self {
+            bin: crate::paths::clean_path(bin),
+            data: crate::paths::clean_path(data),
+            log: crate::paths::clean_path(log),
+            port,
+        }
     }
 
     fn tool(&self, name: &str) -> PathBuf {

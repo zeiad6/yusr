@@ -34,7 +34,6 @@
     "resources": {
       "../resources/postgresql/": "postgresql/",
       "../resources/llama/": "llama/",
-      "../resources/models/": "models/",
       "../resources/web/": "web/"
     },
     "windows": {

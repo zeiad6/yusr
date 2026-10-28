@@ -1,11 +1,12 @@
 # Fills app/resources with everything the self-contained installer ships:
 #   postgresql/  PostgreSQL server binaries (bin, lib, share)
 #   llama/       llama.cpp llama-server for the advisor (CPU build)
-#   models/      the advisor model, advisor.gguf
 #   web/         the built web interface (run `npm run build` in web/ first)
 # Every download is pinned and checked against its SHA-256.
-# -NoModel leaves models/ out, for the lite installer that downloads the model from Settings.
-param([switch]$NoModel)
+# By default, models/ is excluded from the build/installer to keep the installer
+# lightweight and self-contained (< 150 MB). The model is downloaded on demand.
+# Use -WithModel only if explicitly baking the heavy GGUF model into the installer.
+param([switch]$WithModel, [switch]$NoModel)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # the progress bar makes Invoke-WebRequest many times slower
 
@@ -95,13 +96,13 @@ Copy-Item (Join-Path $llDir.FullName 'llama-server.exe') $llOut
 Get-ChildItem -Path $llDir.FullName -Filter *.dll | Copy-Item -Destination $llOut
 Copy-VcRuntime $llOut
 
-# ---- model --------------------------------------------------------------------------
-if ($NoModel) {
-    Remove-Item -Recurse -Force (Join-Path $res 'models') -ErrorAction SilentlyContinue
-} else {
+# ---- model (optional on-demand download, excluded from build by default) ------------
+if ($WithModel -and -not $NoModel) {
     $model = Get-Checked $MODEL_URL $MODEL_SHA256 'advisor.gguf'
     New-Item -ItemType Directory -Force -Path (Join-Path $res 'models') | Out-Null
     Copy-Item $model (Join-Path $res 'models\advisor.gguf') -Force
+} else {
+    Remove-Item -Recurse -Force (Join-Path $res 'models') -ErrorAction SilentlyContinue
 }
 
 # ---- web interface ------------------------------------------------------------------
