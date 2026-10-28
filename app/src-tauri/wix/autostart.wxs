@@ -1,14 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Fragment>
-    <!-- Auto-start Yusr on Windows Boot / User Logon -->
-    <DirectoryRef Id="StartupFolder">
+    <!-- Auto-start Yusr on Windows Boot / User Logon via Registry Run Key -->
+    <DirectoryRef Id="INSTALLDIR">
       <Component Id="YusrBootAutostartShortcut" Guid="7C9A4B3D-1E2F-4C8A-9B5D-6E3F2A1C4B5E">
-        <Shortcut Id="YusrAutostart"
-                  Name="Yusr"
-                  Description="Start Yusr Accounting Suite and private PostgreSQL database on boot"
-                  Target="[!main.exe]"
-                  WorkingDirectory="INSTALLDIR" />
         <RegistryValue Root="HKCU"
                        Key="Software\Microsoft\Windows\CurrentVersion\Run"
                        Name="Yusr"
