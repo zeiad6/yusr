@@ -1,8 +1,13 @@
-# Yusr (يُسر) v0.2.0 — Sovereign Offline Fund Accounting Suite
+# Yusr (يُسر) v0.2.1 — Sovereign Offline Fund Accounting Suite
 
-**Release Tag:** `v0.2.0`  
-**Target Platform:** Windows 10/11 x64 (Self-Contained MSI Package)  
+**Release Tag:** `v0.2.1`  
+**Target Platform:** Windows 10/11 x64 (Self-Contained MSI Package), Linux (Debian/Ubuntu)  
 **License:** PolyForm Noncommercial 1.0.0 (with Patent Defense Grant) — *Commercial use strictly prohibited without prior written authorization from the developer.*
+
+### What's New in v0.2.1 | الجديد في هذا الإصدار:
+- **حل مشكلة مسارات PostgreSQL في ويندوز:** إزالة بادئات Win32 Verbatim (`\\?\` و `//?/`) وتوحيد الفواصل لتفادي تعطل `initdb.exe`.
+- **حزمة تثبيت ذاتية وخفيفة (< 300MB):** تضم خادم PostgreSQL بنسخته الكاملة ومحرك llama ومكتبات Visual C++ وواجهة الويب، لتعمل دون الحاجة إلى اتصال بالإنترنت.
+- **تنزيل النموذج عند الطلب (On-Demand Model Download):** استبعاد ملف النموذج الضخم (~1.3GB) من حزمة التثبيت لتسريع التنزيل، مع إضافة خيار التنزيل الفوري في التطبيق أو عبر شاشة الإعدادات.
 
 ---
 

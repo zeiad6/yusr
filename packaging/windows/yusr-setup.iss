@@ -3,7 +3,7 @@
 ; Excludes: Local AI Model (Downloaded on-demand post-install or via checkbox)
 
 #define AppName "Yusr"
-#define AppVersion "0.2.0"
+#define AppVersion "0.2.1"
 #define AppPublisher "ZeidexSoft"
 #define AppURL "https://zeidexsoft.com"
 #define AppExeName "Yusr.exe"
