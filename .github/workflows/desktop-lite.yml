@@ -11,9 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Target GitHub Release tag (e.g. v0.2.0)"
+        description: "Target GitHub Release tag (e.g. v0.2.1)"
         required: true
-        default: "v0.2.0"
+        default: "v0.2.1"
       clean_stale_assets:
         description: "Delete previous / full installer assets from release before upload"
         type: boolean
@@ -134,7 +134,7 @@ jobs:
         run: |
           $targetTag = "${{ inputs.release_tag || github.ref_name }}"
           if (-not $targetTag -or $targetTag -eq 'main') {
-            $targetTag = 'v0.2.0'
+            $targetTag = 'v0.2.1'
           }
           Write-Host "Target Release Tag: $targetTag"
 
