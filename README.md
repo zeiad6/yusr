@@ -203,7 +203,7 @@ powershell -ExecutionPolicy Bypass -File ./tools/install-autostart.ps1
 
 ## 📜 Intellectual Property, Patent & Non-Commercial License
 
-Copyright © 2025–2026 **ZeidexSoft / Zeiad** (<https://zeidexsoft.com>). All rights reserved.
+Copyright © 2025–2026 **ZeidexSoft / Ziad** (<https://zeidexsoft.com>). All rights reserved.
 
 ### ⚖️ License Summary
 This software is licensed under the **PolyForm Noncommercial License 1.0.0** with explicit Patent Grant and Patent Defense terms:
