@@ -423,6 +423,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
+name = "dunce"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
 name = "ecdsa"
 version = "0.16.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3051,7 +3057,7 @@ dependencies = [
 
 [[package]]
 name = "yusr-domain"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3069,7 +3075,7 @@ dependencies = [
 
 [[package]]
 name = "yusr-infra"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3093,10 +3099,11 @@ dependencies = [
 
 [[package]]
 name = "yusr-launcher"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "axum",
  "base64 0.22.1",
+ "dunce",
  "futures-util",
  "hex",
  "rand 0.8.8",
@@ -3113,7 +3120,7 @@ dependencies = [
 
 [[package]]
 name = "yusr-payments"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "hex",
@@ -3132,7 +3139,7 @@ dependencies = [
 
 [[package]]
 name = "yusr-server"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "argon2",
  "axum",

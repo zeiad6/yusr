@@ -17,21 +17,22 @@ pub fn hidden(cmd: &mut Command) -> &mut Command {
     cmd
 }
 
-/// Runs a tool to completion and returns its output, or its stderr as the error.
-/// For daemon starters (like `pg_ctl start`), stdout/stderr pipes are avoided to prevent
-/// pipe handle inheritance deadlocks on Windows where child daemons hold pipes open.
-pub fn run(program: &Path, args: &[String]) -> Result<String, String> {
+/// Runs a tool to completion with an explicitly specified working directory.
+/// This is required on Windows for PostgreSQL tools (`initdb.exe` and `pg_ctl.exe`)
+/// so that child tools like `postgres.exe` are discovered in the same directory.
+pub fn run_in_dir(program: &Path, args: &[String], working_dir: &Path) -> Result<String, String> {
     let is_daemon_starter = args.first().is_some_and(|s| s == "start");
+    let mut cmd = Command::new(program);
+    cmd.args(args).current_dir(working_dir);
+    hidden(&mut cmd);
+
     if is_daemon_starter {
-        let status = hidden(
-            Command::new(program)
-                .args(args)
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null()),
-        )
-        .status()
-        .map_err(|e| format!("{}: {e}", program.display()))?;
+        let status = cmd
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map_err(|e| format!("{}: {e}", program.display()))?;
 
         if status.success() {
             Ok(String::new())
@@ -39,7 +40,8 @@ pub fn run(program: &Path, args: &[String]) -> Result<String, String> {
             Err(format!("{} failed ({status})", program.display()))
         }
     } else {
-        let out = hidden(Command::new(program).args(args).stdin(Stdio::null()))
+        let out = cmd
+            .stdin(Stdio::null())
             .output()
             .map_err(|e| format!("{}: {e}", program.display()))?;
         let text = |b: &[u8]| String::from_utf8_lossy(b).trim().to_owned();
@@ -48,6 +50,18 @@ pub fn run(program: &Path, args: &[String]) -> Result<String, String> {
         } else {
             Err(format!("{} failed ({}): {} {}", program.display(), out.status, text(&out.stderr), text(&out.stdout)))
         }
+    }
+}
+
+/// Runs a tool to completion and returns its output, or its stderr as the error.
+/// For daemon starters (like `pg_ctl start`), stdout/stderr pipes are avoided to prevent
+/// pipe handle inheritance deadlocks on Windows where child daemons hold pipes open.
+/// Sets the process working directory to the tool's parent directory if present.
+pub fn run(program: &Path, args: &[String]) -> Result<String, String> {
+    if let Some(parent) = program.parent() {
+        run_in_dir(program, args, parent)
+    } else {
+        run_in_dir(program, args, Path::new("."))
     }
 }
 

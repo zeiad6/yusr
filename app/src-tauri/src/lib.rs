@@ -15,21 +15,30 @@ struct Services(Mutex<Option<Running>>);
 fn layout(app: &tauri::AppHandle) -> Result<Layout, String> {
     let raw_res = app.path().resource_dir().map_err(|e| e.to_string())?;
     let res = yusr_launcher::paths::clean_path(raw_res);
-    let exe = if cfg!(windows) { ".exe" } else { "" };
-    let bundled_model = res.join("models").join("advisor.gguf");
-    let (model, model_download) = if bundled_model.exists() {
-        (Some(bundled_model), None)
-    } else {
-        (
-            Some(yusr_launcher::paths::data_dir().join("models").join("advisor.gguf")),
-            Some(yusr_launcher::model::ModelSource::advisor()),
-        )
+    #[cfg(feature = "lite")]
+    let (model, model_download, llama_server) = (None, None, None);
+
+    #[cfg(not(feature = "lite"))]
+    let (model, model_download, llama_server) = {
+        let exe = if cfg!(windows) { ".exe" } else { "" };
+        let bundled_model = res.join("models").join("advisor.gguf");
+        let (m, md) = if bundled_model.exists() {
+            (Some(bundled_model), None)
+        } else {
+            (
+                Some(yusr_launcher::paths::data_dir().join("models").join("advisor.gguf")),
+                Some(yusr_launcher::model::ModelSource::advisor()),
+            )
+        };
+        (m, md, Some(res.join("llama").join(format!("llama-server{exe}"))))
     };
+
+    let pg_bin = yusr_launcher::paths::clean_path(res.join("postgresql").join("bin"));
     Ok(Layout {
         data: yusr_launcher::paths::data_dir(),
-        pg_bin: res.join("postgresql").join("bin"),
+        pg_bin,
         ui_dir: res.join("web"),
-        llama_server: Some(res.join("llama").join(format!("llama-server{exe}"))),
+        llama_server,
         model,
         model_download,
     })

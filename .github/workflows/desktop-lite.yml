@@ -1,26 +1,24 @@
 name: desktop-lite
 
-# Builds the lite Windows installer (MSI): the same Yusr version as desktop.yml, without the
-# bundled advisor model. The model is downloaded in the background (resumable) from Settings,
-# where the local model server can also be started and stopped. desktop.yml is untouched and
-# still builds the full installer.
+# Builds the lightweight, self-contained Windows installer (MSI) for Yusr.
+# Completely excludes the heavy local AI model (~1.3 GB) and llama.cpp runtime,
+# bundling exclusively the core accounting engine, embedded PostgreSQL, and web assets.
+# Targets the v0.2.0 release, purges previous/stale assets, and uploads the verified MSI + SHA-256.
+
 on:
   push:
     tags: ["v*"]
-    branches: [main]
-    paths:
-      - "app/**"
-      - "crates/**"
-      - "web/**"
-      - "migrations/**"
-      - "packaging/**"
-      - ".github/workflows/**"
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Attach the lite MSI to this existing release tag (e.g. v0.2.0); empty = build only"
+        description: "Target GitHub Release tag (e.g. v0.2.0)"
+        required: true
+        default: "v0.2.0"
+      clean_stale_assets:
+        description: "Delete previous / full installer assets from release before upload"
+        type: boolean
         required: false
-        default: ""
+        default: true
 
 permissions:
   contents: write
@@ -32,35 +30,38 @@ concurrency:
 jobs:
   msi-lite:
     runs-on: windows-latest
-    timeout-minutes: 150
+    timeout-minutes: 90
     env:
       CARGO_TERM_COLOR: always
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      # Builds the dispatched branch: the existing v0.2.0 tag predates the lite feature.
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Setup Rust caching
+        uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
           workspaces: |
             . -> target
             app/src-tauri -> target
 
-      - name: Build the web interface
+      - name: Build Web UI
         working-directory: web
         run: |
           npm ci
           npm run build
 
-      # Its own cache: the full workflow's cache holds the model, which this package leaves out.
       - name: Cache downloads & bundled resources
         uses: actions/cache@v4
         with:
@@ -71,37 +72,55 @@ jobs:
           restore-keys: |
             resources-lite-${{ runner.os }}-
 
-      - name: Fetch bundled resources (without the model)
+      - name: Fetch bundled PostgreSQL & runtime (Excluding AI model & llama.cpp)
         shell: pwsh
-        run: ./app/scripts/fetch-resources.ps1 -NoModel
+        run: ./app/scripts/fetch-resources.ps1 -NoModel -NoLlama
 
-      - name: Launcher against the bundled PostgreSQL
+      - name: Test launcher against bundled PostgreSQL
         shell: pwsh
         run: |
           $env:YUSR_TEST_PG_BIN = "$PWD\app\resources\postgresql\bin"
           $env:PATH = "$PWD\app\resources\postgresql\bin;$env:PATH"
           cargo test --release -p yusr-launcher -- --ignored
 
-      - name: Smoke test of the packaged layout (database, server; no model)
+      - name: Smoke test of packaged layout (Without model)
         run: cargo run --release -p yusr-launcher --example smoke -- app/resources --no-model
 
-      - name: Build the lite MSI
+      - name: Build Lite MSI package (WiX Toolset v3)
         working-directory: app
         run: npx --yes @tauri-apps/cli@2.12.4 build --bundles msi --features lite --config src-tauri/tauri.lite.conf.json
 
-      - name: Check and name the installer
+      - name: Verify package size and generate SHA-256 checksum
         shell: pwsh
         run: |
-          $msi = Get-ChildItem app/src-tauri/target/release/bundle/msi/Yusr_*.msi | Select-Object -First 1
-          if (-not $msi) { throw 'no MSI produced' }
-          # Without the model the package must be far below the full one.
-          if ($msi.Length -ge 1GB) { throw "lite MSI is $($msi.Length) bytes: is the model still bundled?" }
-          $lite = Join-Path $msi.DirectoryName ($msi.Name -replace '^Yusr_', 'Yusr-Lite_')
-          Move-Item $msi.FullName $lite -Force
-          "{0} {1:N0} MB" -f (Split-Path -Leaf $lite), ((Get-Item $lite).Length / 1MB)
-          (Get-FileHash $lite -Algorithm SHA256).Hash | Out-File -Encoding ascii "$lite.sha256"
+          $msi = Get-ChildItem app/src-tauri/target/release/bundle/msi/Yusr*.msi | Select-Object -First 1
+          if (-not $msi) { throw "No MSI installer produced by Tauri/WiX build step" }
+          
+          # Enforce Lite package threshold (< 250 MB)
+          if ($msi.Length -ge 250MB) {
+            throw "MSI package size is $([math]::Round($msi.Length / 1MB, 2)) MB. Exceeds Lite threshold; verify model exclusion!"
+          }
 
-      - uses: actions/upload-artifact@v4
+          # Standardize filename format to Yusr-Lite_0.2.0_x64_en-US.msi
+          $destName = $msi.Name
+          if ($destName -notmatch 'Lite') {
+            $destName = $destName -replace '^Yusr_', 'Yusr-Lite_'
+          }
+          $finalMsiPath = Join-Path $msi.DirectoryName $destName
+          if ($msi.FullName -ne $finalMsiPath) {
+            Move-Item $msi.FullName $finalMsiPath -Force
+          }
+
+          $sizeMb = [math]::Round((Get-Item $finalMsiPath).Length / 1MB, 2)
+          Write-Host "Verified Lite MSI: $destName ($sizeMb MB)"
+
+          # Generate standard SHA256 checksum file
+          $hash = (Get-FileHash $finalMsiPath -Algorithm SHA256).Hash
+          "$hash  $destName" | Out-File -Encoding ascii "$finalMsiPath.sha256"
+          Write-Host "Generated Checksum: $hash"
+
+      - name: Upload artifacts to GitHub Actions
+        uses: actions/upload-artifact@v4
         with:
           name: yusr-windows-msi-lite
           path: |
@@ -110,13 +129,38 @@ jobs:
           retention-days: 30
           compression-level: 0
 
-      - name: Publish to the release
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ inputs.release_tag || github.ref_name }}
-          name: "Yusr (يُسر) v0.2.0 — Sovereign Offline Fund Accounting Suite"
-          body_path: RELEASE_NOTES.md
-          files: |
-            app/src-tauri/target/release/bundle/msi/Yusr-Lite_*.msi
-            app/src-tauri/target/release/bundle/msi/Yusr-Lite_*.sha256
+      - name: Overwrite Release Assets via GitHub CLI
+        shell: pwsh
+        run: |
+          $targetTag = "${{ inputs.release_tag || github.ref_name }}"
+          if (-not $targetTag -or $targetTag -eq 'main') {
+            $targetTag = 'v0.2.0'
+          }
+          Write-Host "Target Release Tag: $targetTag"
+
+          # Locate built files
+          $msiFile = Get-ChildItem app/src-tauri/target/release/bundle/msi/Yusr-Lite_*.msi | Select-Object -First 1
+          $shaFile = Get-ChildItem app/src-tauri/target/release/bundle/msi/Yusr-Lite_*.sha256 | Select-Object -First 1
+
+          if (-not $msiFile) { throw "Lite MSI file not found for release upload" }
+
+          # Purge previous/stale assets (e.g. old full packages or broken builds)
+          if ("${{ inputs.clean_stale_assets }}" -ne 'false') {
+            Write-Host "Checking for stale or deprecated release assets..."
+            try {
+              $existingAssets = gh release view $targetTag --json assets -q ".assets[].name" | Out-String -Stream
+              foreach ($asset in $existingAssets) {
+                if ($asset -match '\.(msi|sha256|exe|zip)$') {
+                  Write-Host "Deleting old release asset: $asset"
+                  gh release delete-asset $targetTag $asset --yes
+                }
+              }
+            } catch {
+              Write-Host "Warning: Could not list or clean previous assets; proceeding with upload."
+            }
+          }
+
+          # Upload new Lite MSI and Checksum with --clobber
+          Write-Host "Uploading $($msiFile.Name) and $($shaFile.Name) to release $targetTag..."
+          gh release upload $targetTag $msiFile.FullName $shaFile.FullName --clobber
+          Write-Host "Successfully attached Lite MSI to release $targetTag."

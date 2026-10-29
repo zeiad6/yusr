@@ -6,7 +6,7 @@
 # By default, models/ is excluded from the build/installer to keep the installer
 # lightweight and self-contained (< 150 MB). The model is downloaded on demand.
 # Use -WithModel only if explicitly baking the heavy GGUF model into the installer.
-param([switch]$WithModel, [switch]$NoModel)
+param([switch]$WithModel, [switch]$NoModel, [switch]$NoLlama)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # the progress bar makes Invoke-WebRequest many times slower
 
@@ -86,15 +86,19 @@ Copy-VcRuntime (Join-Path $pgOut 'bin')
 if (-not (Test-Path "$pgOut\bin\initdb.exe")) { throw 'initdb.exe missing' }
 
 # ---- llama.cpp server ---------------------------------------------------------------
-$llZip = Get-Checked "https://github.com/ggml-org/llama.cpp/releases/download/$LLAMA_TAG/llama-$LLAMA_TAG-bin-win-cpu-x64.zip" $LLAMA_SHA256 "llama-$LLAMA_TAG.zip"
-$llDir = Expand-Into $llZip "$res\llama" 'llama-server.exe'
-$llOut = Join-Path $res 'llama'
-if (Test-Path $llOut) { Remove-Item -Recurse -Force $llOut }
-New-Item -ItemType Directory -Force -Path $llOut | Out-Null
-# The server and the libraries it loads; the other command-line tools are left out.
-Copy-Item (Join-Path $llDir.FullName 'llama-server.exe') $llOut
-Get-ChildItem -Path $llDir.FullName -Filter *.dll | Copy-Item -Destination $llOut
-Copy-VcRuntime $llOut
+if (-not $NoLlama) {
+    $llZip = Get-Checked "https://github.com/ggml-org/llama.cpp/releases/download/$LLAMA_TAG/llama-$LLAMA_TAG-bin-win-cpu-x64.zip" $LLAMA_SHA256 "llama-$LLAMA_TAG.zip"
+    $llDir = Expand-Into $llZip "$res\llama" 'llama-server.exe'
+    $llOut = Join-Path $res 'llama'
+    if (Test-Path $llOut) { Remove-Item -Recurse -Force $llOut }
+    New-Item -ItemType Directory -Force -Path $llOut | Out-Null
+    # The server and the libraries it loads; the other command-line tools are left out.
+    Copy-Item (Join-Path $llDir.FullName 'llama-server.exe') $llOut
+    Get-ChildItem -Path $llDir.FullName -Filter *.dll | Copy-Item -Destination $llOut
+    Copy-VcRuntime $llOut
+} else {
+    Remove-Item -Recurse -Force (Join-Path $res 'llama') -ErrorAction SilentlyContinue
+}
 
 # ---- model (optional on-demand download, excluded from build by default) ------------
 if ($WithModel -and -not $NoModel) {

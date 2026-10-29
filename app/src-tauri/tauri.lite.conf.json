@@ -1,8 +1,9 @@
 {
   "bundle": {
-    "longDescription": "Fund accounting, donations and receipts, sponsorships, beneficiaries and aid, volunteers, archive, correspondence, reports and a local advisor model downloaded on request from Settings. Everything runs on this computer.",
+    "longDescription": "Fund accounting, donations and receipts, sponsorships, beneficiaries and aid, volunteers, archive, correspondence, and reports. Everything runs sovereignly on this computer.",
     "resources": {
-      "../resources/models/": null
+      "../resources/models/": null,
+      "../resources/llama/": null
     }
   }
 }

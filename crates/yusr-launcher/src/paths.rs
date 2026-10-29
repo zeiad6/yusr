@@ -10,11 +10,21 @@ pub fn is_ascii_path(p: &Path) -> bool {
     p.to_str().is_some_and(|s| s.is_ascii())
 }
 
-/// Cleans Windows paths by removing Win32 verbatim extended-length prefixes (`\\?\` and `//?/`)
-/// and normalizing all slashes to backslashes on Windows. External console tools like PostgreSQL's
-/// `initdb.exe` and `pg_ctl.exe` spawn sub-tools via `cmd.exe` / `popen`, which fail with
-/// "The system cannot find the path specified" when encountering verbatim prefixes.
+/// Cleans Windows paths by canonicalizing with `dunce::canonicalize` (which avoids `\\?\` prefixes
+/// where possible) and removing any remaining Win32 verbatim extended-length prefixes (`\\?\` and `//?/`)
+/// and normalizing all slashes to backslashes on Windows.
+/// External console tools like PostgreSQL's `initdb.exe` and `pg_ctl.exe` spawn sub-tools via
+/// `cmd.exe` / `popen`, which fail with "The system cannot find the path specified" or
+/// "program 'postgres' is needed by initdb but was not found in the same directory" when encountering verbatim prefixes.
 pub fn clean_path(p: impl AsRef<Path>) -> PathBuf {
+    let p_ref = p.as_ref();
+    let canonical = dunce::canonicalize(p_ref).unwrap_or_else(|_| p_ref.to_path_buf());
+    strip_verbatim_prefix(canonical)
+}
+
+/// Strips Win32 extended-length prefixes (`\\?\`, `//?/`, `\\?\UNC\`)
+/// and ensures clean backslash-separated paths for Windows binaries.
+pub fn strip_verbatim_prefix(p: impl AsRef<Path>) -> PathBuf {
     let s = p.as_ref().to_string_lossy();
     if let Some(stripped) = s.strip_prefix(r"\\?\UNC\") {
         let normalized = format!(r"\\{stripped}").replace('/', "\\");

@@ -29,6 +29,7 @@ async-trait = "0.1"
 axum = { version = "0.8", features = ["macros", "multipart"] }
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["serde", "clock", "std"] }
+dunce = "1.0"
 hex = "0.4"
 hmac = "0.12"
 k256 = { version = "0.13", features = ["ecdsa", "sha256", "pkcs8", "pem"] }

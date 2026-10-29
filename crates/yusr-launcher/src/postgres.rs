@@ -113,13 +113,19 @@ impl Postgres {
         }
         let pwfile = self.data.with_extension("pw");
         std::fs::write(&pwfile, password).map_err(|e| e.to_string())?;
-        let result = process::run(&self.tool("initdb"), &self.initdb_args(user, &pwfile));
+        // Explicitly set the current working directory to bin to ensure initdb finds postgres.exe
+        let result = process::run_in_dir(&self.tool("initdb"), &self.initdb_args(user, &pwfile), &self.bin);
         let _ = std::fs::remove_file(&pwfile);
         result.map(|_| ())
     }
 
     fn running(&self) -> bool {
-        process::run(&self.tool("pg_ctl"), &["status".into(), "-D".into(), self.data.display().to_string()]).is_ok()
+        process::run_in_dir(
+            &self.tool("pg_ctl"),
+            &["status".into(), "-D".into(), self.data.display().to_string()],
+            &self.bin,
+        )
+        .is_ok()
     }
 
     /// Starts the server, first stopping one a crashed session left running (it would hold
@@ -132,7 +138,7 @@ impl Postgres {
         if self.running() {
             self.stop()?;
         }
-        process::run(&self.tool("pg_ctl"), &self.start_args_with_lan(lan)).map(|_| ()).map_err(|e| {
+        process::run_in_dir(&self.tool("pg_ctl"), &self.start_args_with_lan(lan), &self.bin).map(|_| ()).map_err(|e| {
             let log = std::fs::read_to_string(&self.log).unwrap_or_default();
             let tail: String = log.lines().rev().take(15).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
             format!("{e}\n{tail}")
@@ -141,7 +147,7 @@ impl Postgres {
 
     pub fn stop(&self) -> Result<(), String> {
         let args = ["stop", "-D", &self.data.display().to_string(), "-m", "fast", "-w", "-t", WAIT_SECONDS].map(String::from);
-        process::run(&self.tool("pg_ctl"), &args).map(|_| ())
+        process::run_in_dir(&self.tool("pg_ctl"), &args, &self.bin).map(|_| ())
     }
 }
 

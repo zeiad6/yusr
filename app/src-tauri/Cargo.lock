@@ -5989,6 +5989,7 @@ dependencies = [
 name = "yusr-desktop"
 version = "0.2.0"
 dependencies = [
+ "dunce",
  "serde_json",
  "tauri",
  "tauri-build",
@@ -6001,7 +6002,7 @@ dependencies = [
 
 [[package]]
 name = "yusr-domain"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -6018,7 +6019,7 @@ dependencies = [
 
 [[package]]
 name = "yusr-infra"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -6040,10 +6041,11 @@ dependencies = [
 
 [[package]]
 name = "yusr-launcher"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "axum",
  "base64 0.22.1",
+ "dunce",
  "hex",
  "rand 0.8.8",
  "reqwest",
@@ -6058,7 +6060,7 @@ dependencies = [
 
 [[package]]
 name = "yusr-payments"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "hex",
@@ -6076,7 +6078,7 @@ dependencies = [
 
 [[package]]
 name = "yusr-server"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "argon2",
  "axum",

@@ -26,6 +26,7 @@ tauri-build = { version = "2.7", features = [] }
 yusr-launcher = { path = "../../crates/yusr-launcher" }
 tauri = { version = "2.12", features = [] }
 tauri-plugin-single-instance = "2.5"
+dunce = "1.0"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
