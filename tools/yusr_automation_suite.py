@@ -76,6 +76,7 @@ class ForensicReportData:
     cdp_endpoint: str = "http://localhost:9222"
     connected_successfully: bool = False
     login_success: bool = False
+    boot_error: Optional[str] = None
     sections: List[SectionAuditResult] = field(default_factory=list)
     console_errors: List[Dict[str, Any]] = field(default_factory=list)
     console_warnings: List[Dict[str, Any]] = field(default_factory=list)
@@ -175,6 +176,21 @@ class YusrAppLauncher:
         target_exe = found_executables[0]
         logger.info(f"🚀 تشغيل التطبيق تلقائياً من المسار: {target_exe}")
 
+        # في ويندوز: إذا لم يكن منفذ 9222 مفتوحاً، ننهي أي نسخة سابقة لأن بقاء نسخة سابقة
+        # يمنع WebView2 من قراءة متغير البيئة WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
+        if platform.system() == "Windows" and not cls.is_port_open(cls.DEFAULT_PORT):
+            logger.info("🧹 إنهاء أي نسخ سابقة لتطبيق يُسر لمنع تعارض WebView2 وتفعيل منفذ التصحيح...")
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/IM", "Yusr.exe", "/IM", "yusr.exe"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False
+                )
+                await asyncio.sleep(1.0)
+            except Exception as e:
+                logger.debug(f"تنبيه أثناء محاولة إنهاء النسخ السابقة عبر taskkill: {e}")
+
         # تجهيز متغيرات البيئة الخاصة بـ WebView2
         custom_env = os.environ.copy()
         custom_env["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = f"--remote-debugging-port={cls.DEFAULT_PORT}"
@@ -187,7 +203,7 @@ class YusrAppLauncher:
                 creation_flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
 
             subprocess.Popen(
-                [str(target_exe), f"--remote-debugging-port={cls.DEFAULT_PORT}"],
+                [str(target_exe)],
                 env=custom_env,
                 creationflags=creation_flags,
                 stdout=subprocess.DEVNULL,
@@ -314,8 +330,40 @@ class YusrAutomationSuite:
     # إدارة الجلسة والاستماع للأحداث (Session Setup & Event Hooks)
     # ----------------------------------------------------------------------------------
 
+    async def check_database_boot_error(self) -> bool:
+        """
+        فحص أولي للتحقق من عدم وجود شاشة خطأ قاعدة البيانات (.boot-error الخاصة بـ initdb.exe).
+        يرجع True إذا كانت الشاشة سليمة، وFalse في حال ظهور خطأ الإقلاع مع توثيقه في التقرير الجنائي.
+        """
+        if not self.page:
+            return True
+
+        try:
+            try:
+                await self.page.wait_for_load_state("domcontentloaded", timeout=3000)
+            except Exception:
+                pass
+
+            boot_error_elem = self.page.locator(".boot-error")
+            if await boot_error_elem.count() > 0 and await boot_error_elem.first.is_visible():
+                error_text = (await boot_error_elem.first.inner_text()).strip()
+                logger.error(f"❌ تم اكتشاف شاشة خطأ إقلاع قاعدة البيانات (.boot-error الخاصة بـ initdb.exe): {error_text}")
+                shot = await self.capture_silent_screenshot("00_database_boot_error")
+                self.report.boot_error = error_text or "Database boot error (.boot-error)"
+                self.report.advanced_checks["database_boot"] = {
+                    "status": "FAILED",
+                    "error": self.report.boot_error,
+                    "screenshot": shot
+                }
+                return False
+
+            return True
+        except Exception as e:
+            logger.warning(f"تنبيه أثناء فحص خطأ إقلاع قاعدة البيانات: {e}")
+            return True
+
     async def setup_connection(self) -> bool:
-        """الاتصال بـ WebView2 عبر بروتوكول CDP وإعداد مراقبة الأحداث."""
+        """الاتصال بـ WebView2 عبر بروتوكول CDP وإعداد مراقبة الأحداث والفحص الأولي."""
         try:
             self.playwright = await async_playwright().start()
             logger.info(f"🔌 جارٍ الاتصال بـ CDP على {self.cdp_url} ...")
@@ -339,6 +387,14 @@ class YusrAutomationSuite:
 
             # تفعيل الاستماع لأخطاء الـ Console وشبكة الاتصال
             self._attach_telemetry_listeners()
+
+            # فحص أولي للتحقق من عدم وجود شاشة خطأ قاعدة البيانات (.boot-error الخاصة بـ initdb.exe) قبل البدء باختبار تسجيل الدخول
+            is_boot_clean = await self.check_database_boot_error()
+            if not is_boot_clean:
+                logger.error("❌ فشل الفحص الأولي: تم اكتشاف شاشة خطأ قاعدة البيانات (.boot-error) الناتجة عن تعثر initdb.exe.")
+                return False
+
+            logger.info("✓ الفحص الأولي: شاشة التطبيق سليمة وخالية من أخطاء إقلاع قاعدة البيانات (.boot-error).")
             return True
 
         except Exception as e:
@@ -417,6 +473,11 @@ class YusrAutomationSuite:
             await page.wait_for_load_state("domcontentloaded", timeout=5000)
         except Exception:
             pass
+
+        # التحقق من عدم وجود شاشة خطأ قاعدة البيانات (.boot-error) قبل البدء باختبار تسجيل الدخول
+        if not await self.check_database_boot_error():
+            logger.error("❌ لا يمكن البدء باختبار تسجيل الدخول لوجود شاشة خطأ قاعدة البيانات (.boot-error).")
+            return False
 
         # التحقق هل المستخدم مسجل الدخول بالفعل
         current_url = page.url
@@ -656,10 +717,11 @@ class YusrAutomationSuite:
         # ------------------------------------------------------------------------------
         logger.info("\n[2/4] فحص بوابة التحقق من التقارير المنشورة (/verify/report)...")
         try:
-            # الانتقال البرمجي عبر React Router
-            await page.evaluate("() => { window.location.href = '#/verify/report'; }")
-            # أو عبر النقر أو تعديل المسار
-            await page.goto(f"{page.url.split('#')[0]}#/verify/report", timeout=5000)
+            # الانتقال البرمجي باستخدام pushState و PopStateEvent ليتوافق مع BrowserRouter في React 18 دون كسر الجلسة
+            await page.evaluate("""() => {
+                window.history.pushState({}, '', '/verify/report');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+            }""")
             await asyncio.sleep(1.0)
 
             has_verify_input = await page.locator("input, [placeholder*='رمز'], [placeholder*='Token']").count() > 0
@@ -671,6 +733,13 @@ class YusrAutomationSuite:
                 "screenshot": shot
             }
             logger.info(f"  ✓ تم التحقق من بوابة التقارير. وجود حقل الإدخال: {has_verify_input}")
+
+            # العودة إلى المسار الرئيسي عبر BrowserRouter للحفاظ على شريط التنقل للفحوصات اللاحقة
+            await page.evaluate("""() => {
+                window.history.pushState({}, '', '/');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+            }""")
+            await asyncio.sleep(0.5)
 
         except Exception as e:
             logger.warning(f"  ! تنبيه في مسار بوابة التقارير: {e}")
@@ -777,6 +846,8 @@ class YusrAutomationSuite:
                     "end_time": self.report.end_time,
                     "app_version": self.report.app_version,
                     "cdp_endpoint": self.report.cdp_endpoint,
+                    "connected_successfully": self.report.connected_successfully,
+                    "boot_error": self.report.boot_error,
                     "login_success": self.report.login_success
                 },
                 "sections": [s.__dict__ for s in self.report.sections],
@@ -799,11 +870,26 @@ class YusrAutomationSuite:
         md.append(f"- **تاريخ البدء:** `{self.report.start_time}`")
         md.append(f"- **تاريخ الانتهاء:** `{self.report.end_time}`")
         md.append(f"- **منفذ CDP المستخدم:** `{self.report.cdp_endpoint}`")
+        md.append(f"- **حالة الاتصال بـ CDP:** `{'ناجح ✓' if self.report.connected_successfully else 'فشل ❌'}`")
+        if self.report.boot_error:
+            md.append(f"- **حالة إقلاع قاعدة البيانات (initdb):** `❌ فشل رصد شاشة خطأ ({self.report.boot_error})`")
+        else:
+            md.append("- **حالة إقلاع قاعدة البيانات (initdb):** `✓ سليمة (لا توجد أخطاء)`")
         md.append(f"- **حالة تسجيل الدخول:** `{'ناجح ✓' if self.report.login_success else 'فشل ❌'}`\n")
+
+        if self.report.boot_error:
+            md.append("## 🚨 تنبيه أمني وجنائي: خطأ إقلاع قاعدة البيانات (.boot-error / initdb.exe)")
+            md.append("> [!CAUTION]")
+            md.append(f"> **تم رصد شاشة خطأ قاعدة البيانات عند الإقلاع:**\n> ```\n> {self.report.boot_error}\n> ```\n")
+            boot_shot = self.report.advanced_checks.get("database_boot", {}).get("screenshot")
+            if boot_shot:
+                md.append(f"> لقطة الشاشة: [{Path(boot_shot).name}]({Path(boot_shot).name})\n")
+            md.append("\n")
 
         md.append("## 📊 ملخص المؤشرات التنفيذية (KPIs)")
         md.append("| المؤشر | القيمة |")
         md.append("| :--- | :--- |")
+        md.append(f"| حالة إقلاع قاعدة البيانات | **{'❌ خطأ (.boot-error)' if self.report.boot_error else '✅ سليم'}** |")
         md.append(f"| إجمالي الأقسام المفحوصة | **{total_sections}** |")
         md.append(f"| الأقسام السليمة (Passed) | **{passed_sections}** ✅ |")
         md.append(f"| الأقسام المتعثرة (Failed) | **{failed_sections}** ❌ |")
@@ -850,6 +936,8 @@ class YusrAutomationSuite:
         print("\n" + "=" * 70)
         print("🏆 ملخص تقرير الأتمتة والفحص الجنائي لتطبيق يُسر")
         print("=" * 70)
+        if self.report.boot_error:
+            print(f" ❌ خطأ إقلاع قاعدة البيانات (initdb) : {self.report.boot_error}")
         print(f" الأقسام المفحوصة بنجاح : {passed_sections} من أصل {total_sections}")
         print(f" الأقسام المتعثرة        : {failed_sections}")
         print(f" أخطاء Console المرصودة  : {total_errors}")

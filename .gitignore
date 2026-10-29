@@ -10,3 +10,4 @@
 /app/src-tauri/gen/
 /brag-output/
 *.yusrbak
+__pycache__/
