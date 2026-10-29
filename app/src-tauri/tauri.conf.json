@@ -33,7 +33,6 @@
     ],
     "resources": {
       "../resources/postgresql/": "postgresql/",
-      "../resources/llama/": "llama/",
       "../resources/web/": "web/"
     },
     "windows": {

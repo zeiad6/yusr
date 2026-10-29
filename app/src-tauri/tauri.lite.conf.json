@@ -2,8 +2,8 @@
   "bundle": {
     "longDescription": "Fund accounting, donations and receipts, sponsorships, beneficiaries and aid, volunteers, archive, correspondence, and reports. Everything runs sovereignly on this computer.",
     "resources": {
-      "../resources/models/": null,
-      "../resources/llama/": null
+      "../resources/postgresql/": "postgresql/",
+      "../resources/web/": "web/"
     }
   }
 }

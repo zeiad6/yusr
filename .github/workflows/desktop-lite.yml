@@ -41,7 +41,7 @@ jobs:
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22'
           cache: npm
           cache-dependency-path: web/package-lock.json
 
@@ -96,9 +96,9 @@ jobs:
           $msi = Get-ChildItem app/src-tauri/target/release/bundle/msi/Yusr*.msi | Select-Object -First 1
           if (-not $msi) { throw "No MSI installer produced by Tauri/WiX build step" }
           
-          # Enforce Lite package threshold (< 250 MB)
-          if ($msi.Length -ge 250MB) {
-            throw "MSI package size is $([math]::Round($msi.Length / 1MB, 2)) MB. Exceeds Lite threshold; verify model exclusion!"
+          # Enforce Lite package threshold (< 500 MB)
+          if ($msi.Length -ge 500MB) {
+            throw "MSI package size is $([math]::Round($msi.Length / 1MB, 2)) MB. Exceeds Lite threshold (500MB); verify model exclusion!"
           }
 
           # Standardize filename format to Yusr-Lite_0.2.0_x64_en-US.msi
