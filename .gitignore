@@ -11,3 +11,5 @@
 /brag-output/
 *.yusrbak
 __pycache__/
+.wrangler/
+brag-output*/
